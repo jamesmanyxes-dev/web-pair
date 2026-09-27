@@ -1,0 +1,13 @@
+{
+  "name": "evil666md-webpair",
+  "version": "1.0.0",
+  "description": "evil⁶⁶⁶MD — Telegram × WhatsApp × Web pairing bot",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "express": "^4.19.2",
+    "qrcode": "^1.5.4"
+  }
+}
