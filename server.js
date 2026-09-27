@@ -4,6 +4,7 @@ const express = require('express');
 const path = require('node:path');
 const fs = require('node:fs');
 const QRCode = require('qrcode');
+const cmd = require('./commands');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -82,65 +83,43 @@ async function onMsg({ messages }) {
   const jid = msg.key.remoteJid;
   const text = msg.message.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '';
   if (!text) return;
-  let body = text.trim(), name = '', args = [];
-  for (const p of PREFIXES) {
-    if (p && body.startsWith(p)) { body = body.slice(p.length); break; }
-  }
+  let body = text.trim();
+  for (const p of PREFIXES) { if (p && body.startsWith(p)) { body = body.slice(p.length); break; } }
   const sp = body.indexOf(' ');
-  name = (sp === -1 ? body : body.slice(0, sp)).toLowerCase();
-  args = sp === -1 ? [] : body.slice(sp + 1).trim().split(/\s+/);
-  const send = (t, extra = {}) => sock.sendMessage(jid, { text: t, ...extra }, { quoted: msg });
-  const sendImage = async (url, cap) => {
-    const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
-    await sock.sendMessage(jid, { image: buf, caption: cap || '' }, { quoted: msg });
-  };
-  try {
-    if (name === 'menu' || name === 'help') {
-      return send(
-`*╭┈───〔 evil⁶⁶⁶MD 〕┈───⊷*
-*├✦ Owner:* ${OWNER ? 'wa.me/' + OWNER : 'evil'}
-*├✦ Runtime:* ${Math.floor(process.uptime() / 60)}m
-*├✦ Chatbot:* ${chatbotOn ? 'ON' : 'OFF'}
-*╰───────────────────⊷*
-\`『ᴍᴀɪɴ』\`
-╭───────────⊷
-*┋ ⬡ ᴍᴇɴᴜ* · *┋ ⬡ ᴘɪɴɢ* · *┋ ⬡ ᴀɪ*
-*┋ ⬡ ᴡᴀɪғᴜ* · *┋ ⬡ ɢɪʀʟᴅᴘ* · *┋ ⬡ ᴄʜᴀᴛʙᴏᴛ*
-╰───────────⊷
-> *© ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴇᴠɪʟ⁶⁶⁶ᴍᴅ*`);
-    }
-    if (name === 'ping') return send(`🏓 pong — ${Math.floor(process.uptime())}s uptime`);
-    if (name === 'chatbot') {
-      const m = (args[0] || '').toLowerCase();
-      if (m === 'on' || m === 'off') { chatbotOn = m === 'on'; return send(`🤖 Chatbot *${m.toUpperCase()}*`); }
-      return send(`🤖 Chatbot: *${chatbotOn ? 'ON' : 'OFF'}*`);
-    }
-    if (name === 'ai' || name === 'claude' || name === 'gpt') {
-      const q = args.join(' ');
-      if (!q) return send('🤖 Usage: .ai <message>');
-      return send(await chat(q, jid));
-    }
-    if (name === 'waifu' || name === 'animegirl') {
-      const j = await (await fetch('https://nekos.best/api/v2/waifu')).json();
-      return sendImage(j.results[0].url, `❦ Waifu — evil⁶⁶⁶MD`);
-    }
-    if (name === 'girldp') {
-      const n = 1 + Math.floor(Math.random() * 99);
-      return sendImage(`https://randomuser.me/api/portraits/women/${n}.jpg`, `❦ Girl DP — evil⁶⁶⁶MD`);
-    }
-    if (name === 'boydp') {
-      const n = 1 + Math.floor(Math.random() * 99);
-      return sendImage(`https://randomuser.me/api/portraits/men/${n}.jpg`, `❦ Boy DP — evil⁶⁶⁶MD`);
-    }
-    // chatbot auto-reply: DMs or tag/reply
+  const name = (sp === -1 ? body : body.slice(0, sp)).toLowerCase();
+  const args = sp === -1 ? [] : body.slice(sp + 1).trim().split(/\s+/);
+
+  const key = cmd.all[name];
+  if (!key) {
+    // chatbot auto-reply: DMs or when tagged/replied
     if (chatbotOn && AI_KEY) {
       const botJid = sock.user?.id || '';
       const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
       const hit = jid.endsWith('@s.whatsapp.net') || mentioned.some((m) => m.split(':')[0] === botJid.split(':')[0]) || (quoted && quoted.split(':')[0] === botJid.split(':')[0]);
-      if (hit) return send(await chat(text.replace(/@\d+/g, '').trim(), jid));
+      if (hit) {
+        const clean = text.replace(/@\d+/g, '').trim();
+        if (clean.length > 1) return sock.sendMessage(jid, { text: await chat(clean, jid) }, { quoted: msg });
+      }
     }
-  } catch (e) { console.error('[cmd]', e.message); try { send('⚠️ ' + e.message); } catch {} }
+    return;
+  }
+
+  const c = {
+    jid, msg, sock, args, all: cmd.all, desc: cmd.desc, categories: cmd.categories,
+    cmd: name, owner: OWNER, ownerName: 'evil', isOwner: true,
+    chatbotOn: () => chatbotOn,
+    setChatbot: (v) => { chatbotOn = v; return AI_KEY ? '' : '⚠️ Set ANTHROPIC_API_KEY on Render to enable AI replies.'; },
+    banUser: () => '',
+    chat: (q) => chat(q, jid),
+    send: (t, extra = {}) => sock.sendMessage(jid, { text: t, ...extra }, { quoted: msg }),
+    sendImage: async (url, cap) => {
+      const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
+      await sock.sendMessage(jid, { image: buf, caption: cap || '' }, { quoted: msg });
+    },
+  };
+  try { await cmd.table[key].run(c); }
+  catch (e) { console.error('[cmd]', name, e.message); try { c.send('⚠️ ' + e.message); } catch {} }
 }
 
 const PERSONA = 'You are evil⁶⁶⁶MD, a WhatsApp bot: confident, playful, helpful. Reply short and casual like a WhatsApp friend.';
@@ -172,7 +151,7 @@ async function pairCode(number) {
 }
 
 // ── web ──
-app.get('/', (req, res) => res.type('html').send(WEB_HTML));
+app.get('/', (req, res) => { res.type('html'); res.set('Cache-Control', 'no-store, must-revalidate'); res.send(WEB_HTML); });
 app.get('/status', (req, res) => res.json({ ...state, chatbot: chatbotOn }));
 app.get('/pair', async (req, res) => {
   const n = String(req.query.number || '').replace(/[^0-9]/g, '');
@@ -289,9 +268,9 @@ canvas#rain.on{opacity:1}
 @keyframes cardpulse{0%{box-shadow:0 0 0 0 rgba(0,255,102,.5),0 30px 90px -20px rgba(0,255,102,.14)}100%{box-shadow:0 0 0 34px rgba(0,255,102,0),0 30px 90px -20px rgba(0,255,102,.14)}}
 @keyframes rise{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-@keyframes quake{0%{transform:translate(0)}25%{transform:translate(-4px,2px)}50%{transform:translate(4px,-2px)}75%{transform:translate(-2px,-4px)}100%{transform:translate(0)}}
-body.quake{animation:quake .4s ease-in-out}
-body.quake .card{animation:quake .4s ease-in-out}
+@keyframes quake{0%{transform:translate(0) rotate(0deg)}20%{transform:translate(-7px,4px) rotate(-.4deg)}40%{transform:translate(8px,-4px) rotate(.4deg)}60%{transform:translate(-6px,-5px) rotate(-.3deg)}80%{transform:translate(6px,4px) rotate(.3deg)}100%{transform:translate(0) rotate(0)}}
+body.quake{animation:quake .55s cubic-bezier(.36,.07,.19,.97)}
+body.quake .card{animation:quake .55s cubic-bezier(.36,.07,.19,.97)}
 
 .status{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:999px;font-size:11.5px;font-weight:600;letter-spacing:2px;text-transform:uppercase;background:rgba(0,255,102,.06);border:1px solid rgba(0,255,102,.18);color:#9fd8b4;margin-bottom:22px;transition:.3s}
 .status i{width:7px;height:7px;border-radius:50%;background:#fbbf24;animation:pulse 1.6s infinite}
@@ -358,7 +337,7 @@ addEventListener("resize",sizeCanvases);
 function initAudio(){
   if(actx)return;
   try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return}
-  master=actx.createGain();master.gain.value=.85;master.connect(actx.destination);
+  master=actx.createGain();master.gain.value=1.6;master.connect(actx.destination);
   if(actx.state==="suspended")actx.resume();
 }
 /* layered synthesized thunder: crack (broadband burst) + roll (filtered noise tail) + sub */
@@ -369,13 +348,13 @@ function thunder(big){
   for(var i=0;i<d.length;i++){var p=i/d.length;d[i]=(Math.random()*2-1)*Math.pow(1-p,1.5)*(p<.06?3:1);}
   var src=actx.createBufferSource();src.buffer=buf;
   var lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.setValueAtTime(big?2600:900,t);lp.frequency.exponentialRampToValueAtTime(90,t+dur);lp.Q.value=.6;
-  var g=actx.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.9*v,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  var g=actx.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(1.6*v,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+dur);
   src.connect(lp);lp.connect(g);g.connect(master);src.start(t);
   var o=actx.createOscillator();o.type="sine";o.frequency.setValueAtTime(52,t);o.frequency.exponentialRampToValueAtTime(22,t+dur*.85);
-  var og=actx.createGain();og.gain.setValueAtTime(.55*v,t);og.gain.exponentialRampToValueAtTime(.001,t+dur);
+  var og=actx.createGain();og.gain.setValueAtTime(1.1*v,t);og.gain.exponentialRampToValueAtTime(.001,t+dur);
   o.connect(og);og.connect(master);o.start(t);o.stop(t+dur);
   var c=actx.createOscillator();c.type="sawtooth";c.frequency.setValueAtTime(320,t);c.frequency.exponentialRampToValueAtTime(60,t+.28);
-  var cg=actx.createGain();cg.gain.setValueAtTime(big?.5:.18,t);cg.gain.exponentialRampToValueAtTime(.001,t+.3);
+  var cg=actx.createGain();cg.gain.setValueAtTime(big?1.0:.4,t);cg.gain.exponentialRampToValueAtTime(.001,t+.3);
   c.connect(cg);cg.connect(master);c.start(t);c.stop(t+.32);
 }
 function thunderVolume(v){if(thunderTimer)clearTimeout(thunderTimer);thunderTimer=null;if(v<=0){phase=(phase==="idle")?"idle":phase;return}}
@@ -430,7 +409,7 @@ function drawBolts(){
 }
 function strike(big){
   BOLTS.push(makeBolt());
-  if(Math.random()<.5)setTimeout(function(){BOLTS.push(makeBolt())},60+Math.random()*120);
+  if(Math.random()<.75)setTimeout(function(){BOLTS.push(makeBolt())},60+Math.random()*120);
   var f=document.getElementById("flash");
   f.classList.remove("hit","hit2");void f.offsetWidth;f.classList.add("hit");
   if(big){f.classList.add("hit2");
@@ -461,10 +440,10 @@ function drawRain(){
 /* ============================ AMBIENT LOOP ============================ */
 function ambient(){
   if(phase==="idle"){
-    if(Math.random()<.5)strike(Math.random()<.35);
-    thunderTimer=setTimeout(ambient,15000+Math.random()*30000);
+    if(Math.random()<.85)strike(Math.random()<.7);
+    thunderTimer=setTimeout(ambient,6000+Math.random()*14000);
   } else if(phase==="generating"){
-    if(Math.random()<.25)strike(false);
+    if(Math.random()<.5)strike(Math.random()<.3);
     thunderTimer=setTimeout(ambient,6000+Math.random()*9000);
   }
 }
