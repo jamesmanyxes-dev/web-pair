@@ -44,6 +44,7 @@ async function startWA() {
   sock.ev.on('connection.update', async (u) => {
     const { connection, lastDisconnect, qr } = u;
     if (qr) {
+      state.busy = false;   // registration session is live — pairing possible now
       state.qr = qr;
       try { state.qrDataUrl = await QRCode.toDataURL(qr, { margin: 1, width: 300 }); } catch {}
       console.log('[WA] QR ready');
@@ -63,7 +64,7 @@ async function startWA() {
       if (code === DisconnectReason.loggedOut) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
       if (code !== DisconnectReason.loggedOut && restarts < 15) {
         restarts++;
-        setTimeout(startWA, Math.min(restarts * 2000, 15000));
+        setTimeout(startWA, code === 408 ? 1500 : Math.min(restarts * 2000, 15000));
       }
     }
   });
@@ -142,12 +143,40 @@ async function chat(text, jid) {
 }
 
 // ── pairing ──
+function waReady() {
+  // socket exists, not connected, still has a live registration session (qr fresh or pairing possible)
+  return sock && !state.connected && !state.busy;
+}
+async function ensureFreshConnection(maxWaitMs = 25000) {
+  // if the socket is gone or errored out, restart it and wait until it can pair
+  if (!sock || (state.lastError && /closed|Connection/i.test(state.lastError)) ) {
+    state.busy = false;
+    try { sock?.end?.(); } catch {}
+    sock = null;
+    startWA();
+  }
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxWaitMs) {
+    if (waReady()) return true;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return waReady();
+}
 async function pairCode(number) {
-  if (!sock) throw new Error('Bot still starting — try again in a few seconds');
   if (state.connected) throw new Error('Already paired!');
-  const code = await sock.requestPairingCode(number);
-  state.pairingCode = code; state.pairedFor = number;
-  return code;
+  const ok = await ensureFreshConnection();
+  if (!ok || !sock) throw new Error('Bot is reconnecting — press Generate again in ~10 seconds');
+  try {
+    const code = await sock.requestPairingCode(number);
+    state.pairingCode = code; state.pairedFor = number;
+    return code;
+  } catch (e) {
+    // dead socket mid-flight: nuke and tell the user to retry
+    try { sock?.end?.(); } catch {}
+    sock = null; state.lastError = 'Connection Closed';
+    startWA();
+    throw new Error('Connection closed — reconnecting now, press Generate again in ~10 seconds');
+  }
 }
 
 // ── web ──
