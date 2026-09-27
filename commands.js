@@ -60,41 +60,50 @@ async function sendAnimeGirl(c, note) {
 // ---------- handlers ----------
 const handlers = {
   menu: async (c) => {
-    const up = Math.floor(process.uptime());
-    const runtime = `${Math.floor(up / 3600)}h ${Math.floor((up % 3600) / 60)}m ${up % 60}s`;
-    const total = Object.keys(c.all).length;
-    const head =
-      `*╭┈───〔 evil⁶⁶⁶MD 〕┈───⊷*\n` +
-      `*├✦ Owner:* ${c.ownerName || 'evil'}\n` +
-      `*├✦ Commands:* ${total}\n` +
-      `*├✦ Runtime:* ${runtime}\n` +
-      `*├✦ Prefix:* .\n` +
-      `*├✦ Mode:* ${c.chatbotOn() ? 'ai-on' : 'public'}\n` +
-      `*├✦ Version:* 7.0.0 ʙᴇᴛᴀ\n` +
-      `*╰───────────────────⊷*\n`;
-    const box = (title, items) =>
-      '`『' + sc(title) + '』`\n' +
-      '╭───────────────────⊷\n' +
-      items.map((i) => `*┋ ⬡ ${sc(i)}*`).join('\n') +
-      '\n╰───────────────────⊷\n';
-    const cats = c.categories;
-    let body = '';
-    for (const [t, items] of Object.entries(cats)) body += box(t, items) + '\n';
-    body += `> *© ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴇᴠɪʟ⁶⁶⁶ᴍᴅ*`;
-    // chunk
-    const chunks = [];
-    let cur = head;
-    for (const part of body.split('\n\n')) {
-      if ((cur + part).length > 3800) { chunks.push(cur); cur = ''; }
-      cur += part + '\n\n';
+    const { date, time } = { date: new Date().toDateString(), time: new Date().toLocaleTimeString('en-GB') };
+    const up      = `${Math.floor(process.uptime()/3600)}h ${Math.floor((process.uptime()%3600)/60)}m ${Math.floor(process.uptime()%60)}s`;
+    const total   = Object.values(CMDS).flat().length;
+    const botName = c.botName || 'evil⁶⁶⁶MD';
+    const owner   = c.owner ? 'wa.me/' + c.owner : 'evil';
+    let section   = '';
+    for (const [cat, list] of Object.entries(CMDS)) {
+      section += `\n> ━━ ${cat.toUpperCase()} ━━\n`;
+      section += list.map(x => `> ❐ ${x}`).join('\n') + '\n';
     }
-    chunks.push(cur);
-    for (let i = 0; i < chunks.length; i++) {
-      if (i) await new Promise((r) => setTimeout(r, 800));
-      await c.send(chunks[i].trim());
+    const menuText =
+`> ┏❐  ⌜ *${botName}*⌟  ❐ 
+> ┃⭔ owner : ${owner}
+> ┃⭔ prefix : .
+> ┃⭔ mode : ${c.chatbotOn() ? 'ai-on' : 'public'}
+> ┃⭔ host : ${c.host || 'not paired'}
+> ┃⭔ uptime : ${up}
+> ┃⭔ speed : fast
+> ┃⭔ date : ${date}
+> ┃⭔ time : ${time}
+> ┃⭔ library : @whiskeysockets/baileys
+> ┃⭔ total cmds : ${total}
+> ┃⭔ type : case
+> ┃⭔ credits : evil
+> ┃⭔ company : evil⁶⁶⁶MD Inc
+> ┗❐
+
+> ┏❐  ⌜ *COMMANDS*⌟  ❐ 
+${section}
+> ┗❐ ┈┈┈┈┈┈┈┈┈┈✧`;
+    // chunk for WhatsApp
+    const parts = [];
+    let cur = '';
+    for (const line of menuText.split('\n')) {
+      if ((cur + line).length > 3400) { parts.push(cur); cur = ''; }
+      cur += line + '\n';
+    }
+    parts.push(cur);
+    for (let i = 0; i < parts.length; i++) {
+      if (i) await new Promise(r => setTimeout(r, 700));
+      await c.send(parts[i]);
     }
   },
-  ping: async (c) => {
+    ping: async (c) => {
     const lat = Date.now() - Number(c.msg.messageTimestamp) * 1000;
     c.send(`*╭┈───〔 ᴘɪɴɢ 〕┈───⊷*\n*├✦ ʟᴀᴛᴇɴᴄʏ:* ${lat > 0 ? lat : 0}ᴍs\n*├✦ ᴜᴘᴛɪᴍᴇ:* ${Math.floor(process.uptime() / 60)}ᴍ\n*├✦ sᴛᴀᴛᴜs:* ᴀʟɪᴠᴇ ✅\n*╰───────────────────⊷*`);
   },
@@ -259,6 +268,26 @@ const handlers = {
   },
 };
 
+// ---------- panel-native CMDS map (case.js style) ----------
+const CMDS = {
+  General:   ['menu','ping','uptime','alive','owner','speed','script','repo','support','developer','updates','credits'],
+  Owner:     ['setprefix','setowner','setbotname','setmenuimg','setbotimg','setfonts','public','self','addprem','delprem','antidelete','iphonemode','autoviewstatus','autolikestatus','anticall','block','unblock','listblocked','broadcast','pair'],
+  Group:     ['promote','demote','kick','mute','unmute','tagall','tagadmins','grouplink','revoke','groupinfo','setgname','setgdesc','hidetag','warn','resetwarn','warnings','antilink','antimedia','welcome','goodbye','lock','unlock','everyone','admins','listgroups','members','approveall','rejectall','checkpending','disap','antimention','antispam','antibot','slowmode','endpoll','setwelcomemsg','setgoodbyemsg','kickinactive','mutelist','softban','kickall'],
+  Utility:   ['sticker','toimg','vv','qr','weather','tr','uploadstatus','setmypp','getpp','tts','tourl','ocr','shorten','friends','play','playdoc','idch','lyrics','imagine','carbon','instagram','tiktok','facebook','twitter','pinterest','spotify','ytmp4','base64','unbase64','whois','reversegif','attp','emojimix'],
+  Fun:       ['joke','fact','quote','dare','truth','riddle','roast','ship','coinflip','dice','magic8','horoscope','meme','cat','dog','waifu','anime','trivia','compliment','bored','rps','math','typeracer','neverhaveiever','wouldyourather'],
+  Reactions: ['hug','kiss','slap','pat','poke','cuddle','bite','blush','tickle','highfive','feed','nom','wave','dance','punch','handshake','salute','tableflip','shrug','facepalm','cry','pout','blowkiss','handhold','laugh','smile','wink','smug','run','yawn','cool','celebrate','yay','angry','sad','scared','surprised','shocked','think','confused','nuzzle','sleep','spin','kabedon','bonk','baka','yeet','tehee','peck','sip','stare','clap','nod','nope','headbang','bully','cringe','awoo','glomp'],
+  Scraps:    ['ytmp3','ytmp4dl','fbdl','igdl','ttdl','twitterdl','pindl','spotifydl','lyrics2','movieinfo','animeinfo','mangainfo','gameinfo','anisearch','charsearch','animequote','animefact','animechar','dictionary','thesaurus','wikipedia','news','crypto','currency','football','weather2','waifu2','neko','animeimg','motivate','fakeid','screenshot','pastebin','shorturl2','reverseimage'],
+  Illusion:  ['blur','sharpen','grayscale','invert','sepia','pixelate','mirror','flipimg','rotate90','wanted','jail','rip','triggered','beauty','shine','rainbow','caption','meme2','demotivator','achievement','glitch','deepfry','oil','sketch','neon','vaporwave','fisheye','zoom','animefy','cartoon','pop','comic','burntext','spintext','neontext'],
+  Social:    ['ship2','crush','compatibility','lovemeter','heartrate','advice','rant','confession','compliment2','insult2','pickup','rizz','wouldyou','neverhave','hotornot','simp','toxic','villain','hero','npccheck','zodiac','personality','mbti','vibe','aura','rate','ratemyname','aesthetic','drip','ratio','clout','slay','flop'],
+  AI:        ['gpt','ask','chat','explain','summarize','translate2','rewrite','code','debugcode','reviewcode','pseudocode','regexgen','essay','poem2','story2','caption2','tweet','email2','roastme','complimentme','horoscope2','fortune','affirmation','recipe2','workout2','studyplan','brandname','slogan','bio','cv'],
+  Economy:   ['balance','bal','daily','work','deposit','withdraw','transfer','rob','shop','buy','inventory','sell','slots','blackjack','leaderboard','richlist','give','beg','crime','lottery','mine','fish','hunt','plant','harvest','craft','levelup','profile','bankrob','heist'],
+  Tools:     ['calculator','bmi','age','timezone','worldtime','countdown','reminder','color2','gradient','palette','fontlist','emoji','emojisearch','qrgenerator','barcode','readqr','vcard','unitconvert','tempconvert','dataconvert','speedconvert','ip2','myip','traceroute','wordcount','charcount','linecount','diff','jsonformat','csvparse','markdownpreview'],
+  Stickers:  ['sticker2','stickerinfo','emojisticker','gifsticker','videosticker','cropsticker','circleimg','tenor','giphy','gifcat','gifdog','gifanime','stealsticker','packname','packauthor','togif','giftext','gifmeme','randgif','animegif','randmeme'],
+  Music:     ['lyrics3','musicsearch','albuminfo','artistinfo','charttop','recommend','playlist','bpm','key','genre','mood','genius','soundcloud','suno','lastfm','discography','trackinfo','deezer','applemusic','shazam2','remix'],
+  Games:     ['tictactoe','rps2','quiz','typerace','hangman','wordle','numberguess','trivia2','riddle2','memory','reaction','fasttype','scramble','anagram','truthordare','8ball','astrology','personatest','iq','rank','xp','daily2','streak','badge'],
+  Developer: ['minify','beautify','formatjson','jsoncheck','regex','npm','github','b64enc','b64dec','hexenc','hexdec','md5','sha256','sha512','jwt','ipinfo','whoisdomain','dns','uuid','password','lorem','slug','randstr','timestamp'],
+};
+
 // ---------- categories for the menu ----------
 const categories = {
   MAIN: ['menu', 'help', 'ping', 'owner', 'uptime', 'echo'],
@@ -337,4 +366,4 @@ for (const [key, fn] of Object.entries(handlers)) table[key] = { run: fn };
 const catAliases = {};
 for (const [t, items] of Object.entries(categories)) catAliases[t] = items.map(sc);
 
-module.exports = { all, table, desc: {}, getJSON, getBuffer, safeCalc, categories, sc };
+module.exports = { all, table, desc: {}, getJSON, getBuffer, safeCalc, categories, sc, CMDS };

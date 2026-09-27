@@ -107,7 +107,7 @@ async function onMsg({ messages }) {
 
   const c = {
     jid, msg, sock, args, all: cmd.all, desc: cmd.desc, categories: cmd.categories,
-    cmd: name, owner: OWNER, ownerName: 'evil', isOwner: true,
+    cmd: name, owner: OWNER, ownerName: 'evil', isOwner: true, host: state.user || 'not paired', botName: 'evil⁶⁶⁶MD',
     chatbotOn: () => chatbotOn,
     setChatbot: (v) => { chatbotOn = v; return AI_KEY ? '' : '⚠️ Set ANTHROPIC_API_KEY on Render to enable AI replies.'; },
     banUser: () => '',
