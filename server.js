@@ -347,7 +347,7 @@ button .spin{width:15px;height:15px;border:2px solid rgba(4,20,10,.3);border-top
 <script>
 "use strict";
 /* ============================ STATE ============================ */
-var code=null, phase="idle", actx=null, master=null, rainSrc=null, rainGain=null, thunderTimer=null;
+var code=null, state_code_cleared=false, phase="idle", actx=null, master=null, rainSrc=null, rainGain=null, thunderTimer=null;
 var BOLTS=[], DROPS=[], boltC=document.getElementById("bolt"), rainC=document.getElementById("rain");
 var bx=boltC.getContext("2d"), rx=rainC.getContext("2d");
 
@@ -493,7 +493,9 @@ function render(){
   } else form();
 }
 function resetPair(){
-  code=null;phase="idle";
+  code=null;
+  state_code_cleared=true;
+  phase="idle";
   rainIntensity=0;rainC.classList.remove("on");fadeRainSound();
   document.body.classList.remove("storm-dark");
   if(thunderTimer)clearTimeout(thunderTimer);thunderTimer=null;
@@ -524,15 +526,17 @@ async function refresh(){
     if(s.connected){setStatus("ok","connected \u2014 +"+s.user);
       if(!document.getElementById("again")) setBox('<div style="font-size:13px;color:#8fae9e;line-height:2">Session live. Type <b style="color:#00ff66">.menu</b> on WhatsApp.</div><button id="again" class="ghost">Pair Another Number</button>');
       var a=document.getElementById("again"); if(a)a.onclick=resetPair; return}
-    if(s.pairingCode&&!code){code=s.pairingCode;phase="ready";render();setStatus("ok","code ready \u2014 expires soon");return}
+    if(s.pairingCode&&state_code_cleared){} // user explicitly reset — don't resurrect the old code
+    else if(s.pairingCode&&!code){code=s.pairingCode;phase="ready";render();setStatus("ok","code ready \u2014 expires soon");return}
     if(!code&&phase!=="generating"&&!document.getElementById("n"))form();
   }catch(e){setStatus("err","connection lost \u2014 retrying")}
 }
 
-/* wake audio on first interaction */
-function wake(){initAudio();if(phase==="idle"&&!thunderTimer)ambient();}
+/* storm visuals start IMMEDIATELY on load; audio joins on first interaction */
+function wake(){initAudio();}   // just unlocks the audio engine; ambient loop already running
 ["pointerdown","keydown","touchstart"].forEach(function(ev){addEventListener(ev,wake,{passive:true})});
 
 sizeCanvases();form();refresh();setInterval(refresh,4000);requestAnimationFrame(drawBolts);requestAnimationFrame(drawRain);
-setTimeout(function(){if(!actx)ambient()},800); /* visual lightning even before audio wake */
+ambient();  // thunder+lightning from the first second */
+
 </script></body></html>`;
