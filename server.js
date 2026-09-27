@@ -237,208 +237,283 @@ async function startTG() {
 }
 
 // ── web UI (fancy) ──
-const WEB_HTML = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>evil\u2076\u2076\u2076MD \u2014 Storm Pair</title>
+const WEB_HTML = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>evil\u2076\u2076\u2076MD | ZISKY \u2014 WhatsApp Pairing Portal</title>
+<meta name="theme-color" content="#04070c">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{min-height:100dvh;font-family:system-ui,-apple-system,sans-serif;color:#eaf0ea;overflow-x:hidden;background:linear-gradient(180deg,#0b1410 0%,#0d1a14 55%,#050a08 100%);display:flex;align-items:center;justify-content:center;position:relative;cursor:default}
-/* storm sky layers */
-.sky{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
-.cloud{position:absolute;border-radius:50%;filter:blur(28px);background:radial-gradient(circle at 30% 60%,#2c3a34 0%,#141d19 60%,transparent 75%);opacity:.9}
-.cloud.c1{width:60vw;height:26vh;top:-6vh;left:-8vw;animation:drift1 26s ease-in-out infinite alternate}
-.cloud.c2{width:70vw;height:30vh;top:-9vh;right:-12vw;background:radial-gradient(circle at 65% 55%,#26332d 0%,#101814 60%,transparent 75%);animation:drift2 32s ease-in-out infinite alternate}
-.cloud.c3{width:44vw;height:20vh;top:2vh;left:24vw;opacity:.75;animation:drift1 40s ease-in-out infinite alternate-reverse}
-@keyframes drift1{to{transform:translateX(6vw) scaleY(1.08)}}
-@keyframes drift2{to{transform:translateX(-7vw) scaleY(.94)}}
-/* lightning bolt svg */
-.bolt{position:fixed;top:16vh;z-index:2;pointer-events:none;opacity:0;filter:drop-shadow(0 0 18px #c8ff4d) drop-shadow(0 0 42px #7dff3a)}
-.bolt.on{opacity:1;animation:boltflash .9s ease-out}
-@keyframes boltflash{0%{opacity:0}6%{opacity:1}18%{opacity:.2}26%{opacity:.9}60%{opacity:.25}100%{opacity:0}}
-/* flash overlays */
-.flash{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 12%,rgba(220,255,150,.55),rgba(120,255,80,.15) 45%,transparent 70%)}
-.flash.on{animation:flashfade .75s ease-out}
-@keyframes flashfade{0%{opacity:0}8%{opacity:1}22%{opacity:.25}34%{opacity:.85}100%{opacity:0}}
-.greenwash{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 30%,rgba(60,255,120,.35),rgba(30,200,90,.12) 50%,transparent 75%)}
-.greenwash.on{animation:gw .95s ease-out}
-@keyframes gw{0%{opacity:0}10%{opacity:1}100%{opacity:0}}
-/* shake */
-body.shake{animation:shake .55s cubic-bezier(.36,.07,.19,.97)}
-@keyframes shake{10%,90%{transform:translate(-2px,1px)}20%,80%{transform:translate(3px,-2px)}30%,50%,70%{transform:translate(-5px,2px)}40%,60%{transform:translate(5px,-1px)}}
-/* rain */
-canvas.rain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:0;transition:opacity 1.6s}
-canvas.rain.on{opacity:.85}
-/* ui */
-.card{position:relative;z-index:5;width:min(92vw,400px);background:rgba(10,20,15,.72);backdrop-filter:blur(22px);border:1px solid rgba(140,255,170,.14);border-radius:26px;padding:32px 26px 26px;text-align:center;box-shadow:0 30px 80px -20px rgba(40,220,110,.18),inset 0 1px 0 rgba(255,255,255,.05);animation:rise .9s cubic-bezier(.2,.9,.3,1) both}
-@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
-.logo{width:72px;height:72px;margin:0 auto 14px;border-radius:22px;display:grid;place-items:center;font-size:34px;background:linear-gradient(135deg,#0f3d22,#134e2b 60%,#1c7a42);box-shadow:0 10px 30px -6px rgba(60,220,120,.45);animation:float 5s ease-in-out infinite}
-@keyframes float{50%{transform:translateY(-7px)}}
-h1{font-size:25px;letter-spacing:.5px}
-h1 b{background:linear-gradient(90deg,#7dffa8,#4ade80,#a3e635);-webkit-background-clip:text;background-clip:text;color:transparent}
-.sub{color:#8fa398;font-size:13px;margin:4px 0 18px}
-.badge{display:inline-flex;gap:7px;align-items:center;padding:6px 14px;border-radius:999px;font-size:12.5px;font-weight:600;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);color:#8fa398;margin-bottom:16px}
-.dot{width:7px;height:7px;border-radius:50%;background:#fbbf24;animation:blink 1.6s infinite}
-@keyframes blink{50%{opacity:.3}}
-.badge.ok{color:#4ade80;border-color:rgba(74,222,128,.35)}.badge.ok .dot{background:#4ade80;animation:none}
-.badge.err{color:#f87171;border-color:rgba(248,113,113,.3)}.badge.err .dot{background:#f87171;animation:none}
-input{width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(140,255,170,.18);color:#eaf0ea;border-radius:14px;padding:12px 14px;font-size:15px;outline:none;text-align:center;letter-spacing:1px;transition:.25s}
-input:focus{border-color:#4ade80;box-shadow:0 0 0 4px rgba(74,222,128,.15)}
-button{width:100%;margin-top:12px;padding:13px;border:0;border-radius:14px;font-weight:700;font-size:15px;color:#04120a;background:linear-gradient(135deg,#34d399,#16a34a);cursor:pointer;box-shadow:0 8px 24px -8px rgba(34,197,94,.6);transition:transform .15s}
-button:hover{transform:translateY(-2px)}
-button:disabled{opacity:.55;cursor:wait}
-.code{font-family:ui-monospace,monospace;font-size:33px;letter-spacing:9px;font-weight:700;color:#d9ffe6;background:linear-gradient(135deg,rgba(52,211,153,.22),rgba(74,222,128,.14));border:1px solid rgba(74,222,128,.45);border-radius:16px;padding:15px 6px;margin:14px 0 6px;text-shadow:0 0 22px rgba(74,222,128,.75);animation:glow 2.4s ease-in-out infinite}
-@keyframes glow{50%{box-shadow:0 0 34px rgba(74,222,128,.45)}}
-.code .ch{display:inline-block;animation:flip .5s cubic-bezier(.2,.9,.3,1) both}
-@keyframes flip{from{opacity:0;transform:translateY(-14px) rotateX(80deg)}to{opacity:1;transform:none}}
-.steps{margin-top:14px;text-align:left;color:#8fa398;font-size:12.6px;line-height:2}
-.steps b{color:#cfe8d6}
-.tg{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07);font-size:12px;color:#8fa398}
-.tg a{color:#4ade80;text-decoration:none;font-weight:600}
-.spin{width:15px;height:15px;border:2px solid rgba(74,222,128,.25);border-top-color:#4ade80;border-radius:50%;display:inline-block;animation:sp .8s linear infinite;vertical-align:-3px;margin-right:8px}
-@keyframes sp{to{transform:rotate(360deg)}}
-.hint-audio{position:fixed;bottom:14px;left:0;right:0;text-align:center;font-size:11px;color:#4b5f54;z-index:6}
-footer{position:fixed;bottom:30px;left:0;right:0;text-align:center;font-size:11px;color:#3d4f45;z-index:6}
-</style></head><body>
-<svg class="bolt" id="boltL" style="left:22vw" width="120" height="300" viewBox="0 0 120 300"><path d="M70 0 L30 130 L62 130 L18 300 L58 150 L34 150 Z" fill="#eaffb0"/></svg>
-<svg class="bolt" id="boltR" style="right:18vw" width="100" height="260" viewBox="0 0 120 300"><path d="M64 0 L28 120 L58 122 L20 260 L54 140 L32 142 Z" fill="#eaffb0"/></svg>
-<div class="sky"><div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div></div>
-<canvas class="rain" id="rain"></canvas>
-<div class="flash" id="flash"></div><div class="greenwash" id="gw"></div>
+html,body{height:100%}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#04070c;color:#e8f5ee;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;position:relative;-webkit-font-smoothing:antialiased}
 
-<div class="card">
-<div class="logo">\u26c8\ufe0f</div>
-<h1>evil<b>\u2076\u2076\u2076MD</b></h1>
-<div class="sub">storm pairing portal \u2014 summon your code</div>
-<div class="badge" id="badge"><span class="dot"></span><span id="btxt">summoning\u2026</span></div>
-<div id="box"></div>
-<div class="tg">Prefer Telegram? <a href="https://t.me/Gojo_saturo_evil_bot">@Gojo_saturo_evil_bot</a> \u2022 /pair</div>
+/* ===== LAYERED STORM SKY (multi-layer, parallax, blur/opacity depth) ===== */
+.cloudlayer{position:fixed;left:0;right:0;pointer-events:none;z-index:1}
+.cloudlayer.l1{top:-8vh;height:34vh;filter:blur(46px);opacity:.95;animation:drift1 44s linear infinite}
+.cloudlayer.l2{top:-4vh;height:28vh;filter:blur(30px);opacity:.8;animation:drift2 31s linear infinite}
+.cloudlayer.l3{top:2vh;height:20vh;filter:blur(18px);opacity:.55;animation:drift3 22s linear infinite}
+.cloudlayer::before,.cloudlayer::after{content:"";position:absolute;border-radius:100px;background:radial-gradient(ellipse 40% 70% at 30% 50%,var(--c1),transparent 70%),radial-gradient(ellipse 35% 60% at 70% 40%,var(--c2),transparent 70%)}
+.cloudlayer::before{width:120vw;height:100%;left:-10vw}
+.cloudlayer::after{width:120vw;height:120%;left:-30vw;top:30%}
+.l1{--c1:#0f1720;--c2:#0c1219}
+.l2{--c1:#111b26;--c2:#0d141d}
+.l3{--c1:#16222f;--c2:#111a24}
+body.storm-dark .cloudlayer{filter:brightness(.55)}
+@keyframes drift1{from{transform:translateX(0)}to{transform:translateX(50vw)}}
+@keyframes drift2{from{transform:translateX(0)}to{transform:translateX(-40vw)}}
+@keyframes drift3{from{transform:translateX(0)}to{transform:translateX(28vw)}}
+
+/* canvas layers */
+canvas#bolt{position:fixed;inset:0;z-index:2;pointer-events:none}
+canvas#rain{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity 2s}
+canvas#rain.on{opacity:1}
+/* full-screen flash overlay: green-white, 100-200ms */
+#flash{position:fixed;inset:0;z-index:4;pointer-events:none;opacity:0;background:linear-gradient(180deg,rgba(200,255,220,.5),rgba(0,255,102,.18) 55%,transparent)}
+#flash.hit{animation:flash .16s ease-out}
+#flash.hit2{animation:flash2 .13s ease-out .1s}
+@keyframes flash{0%{opacity:0}15%{opacity:1}100%{opacity:0}}
+@keyframes flash2{0%{opacity:.7}100%{opacity:0}}
+
+/* ===== BRANDING ===== */
+.brand{position:relative;z-index:10;text-align:center;margin-bottom:22px;animation:rise 1s .1s both}
+.brand h1{font-size:clamp(24px,6vw,34px);letter-spacing:2px;font-weight:800;color:#fff;text-shadow:0 0 24px rgba(0,255,102,.35),0 2px 12px rgba(0,0,0,.8)}
+.brand h1 .g{color:#00ff66;text-shadow:0 0 28px rgba(0,255,102,.6)}
+.brand .brandname{font-weight:900;letter-spacing:4px}
+.brand sup{font-size:.45em;color:#00ff66;letter-spacing:1px;vertical-align:super}
+.brand .sub{color:#9fb8ab;font-size:13px;letter-spacing:5px;text-transform:uppercase;margin-top:8px}
+.brand .net{display:inline-flex;align-items:center;gap:8px;margin-top:10px;color:#6d8a7b;font-size:11px;letter-spacing:3px;text-transform:uppercase}
+.brand .net i{width:6px;height:6px;border-radius:50%;background:#00ff66;box-shadow:0 0 10px #00ff66;animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* ===== GLASS PANEL ===== */
+.card{position:relative;z-index:10;width:min(92vw,420px);background:rgba(255,255,255,0.08);backdrop-filter:blur(24px) saturate(140%);-webkit-backdrop-filter:blur(24px) saturate(140%);border:1px solid rgba(0,255,102,.22);border-radius:24px;padding:34px 30px 28px;text-align:center;box-shadow:0 30px 90px -20px rgba(0,255,102,.14),0 10px 40px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.12);animation:rise 1s .25s both,float 7s ease-in-out 1.2s infinite;transition:border-color .4s,box-shadow .4s}
+.card.pulse{animation:rise 1s .25s both,float 7s ease-in-out 1.2s infinite,cardpulse 1.1s ease-out}
+@keyframes cardpulse{0%{box-shadow:0 0 0 0 rgba(0,255,102,.5),0 30px 90px -20px rgba(0,255,102,.14)}100%{box-shadow:0 0 0 34px rgba(0,255,102,0),0 30px 90px -20px rgba(0,255,102,.14)}}
+@keyframes rise{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes quake{0%{transform:translate(0)}25%{transform:translate(-4px,2px)}50%{transform:translate(4px,-2px)}75%{transform:translate(-2px,-4px)}100%{transform:translate(0)}}
+body.quake{animation:quake .4s ease-in-out}
+body.quake .card{animation:quake .4s ease-in-out}
+
+.status{display:inline-flex;align-items:center;gap:8px;padding:7px 16px;border-radius:999px;font-size:11.5px;font-weight:600;letter-spacing:2px;text-transform:uppercase;background:rgba(0,255,102,.06);border:1px solid rgba(0,255,102,.18);color:#9fd8b4;margin-bottom:22px;transition:.3s}
+.status i{width:7px;height:7px;border-radius:50%;background:#fbbf24;animation:pulse 1.6s infinite}
+.status.ok{color:#00ff66;border-color:rgba(0,255,102,.4)}.status.ok i{background:#00ff66;box-shadow:0 0 12px #00ff66;animation:none}
+.status.err{color:#ff6b6b;border-color:rgba(255,107,107,.35)}.status.err i{background:#ff6b6b;animation:none}
+.status.busy{color:#8fd4ff;border-color:rgba(143,212,255,.3)}.status.busy i{background:#8fd4ff}
+
+label{display:block;text-align:left;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#7da291;margin:0 0 8px 4px}
+.field{position:relative}
+input{width:100%;background:rgba(4,7,12,.55);border:1px solid rgba(0,255,102,.2);color:#eafff3;border-radius:14px;padding:15px 16px;font-size:16px;letter-spacing:1px;outline:none;text-align:center;transition:.3s;font-variant-numeric:tabular-nums}
+input::placeholder{color:#517061;letter-spacing:0}
+input:focus{border-color:#00ff66;box-shadow:0 0 0 4px rgba(0,255,102,.12),0 0 24px rgba(0,255,102,.15)}
+button{width:100%;margin-top:14px;padding:15px;border:0;border-radius:14px;font-size:14px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#04140a;background:linear-gradient(135deg,#00ff66,#00cc55);cursor:pointer;box-shadow:0 10px 30px -8px rgba(0,255,102,.55);transition:transform .18s,box-shadow .18s,opacity .3s;position:relative;overflow:hidden}
+button:hover{transform:translateY(-2px);box-shadow:0 14px 36px -8px rgba(0,255,102,.75)}
+button:active{transform:translateY(0)}
+button:disabled{opacity:.75;cursor:wait;transform:none}
+button .spin{width:15px;height:15px;border:2px solid rgba(4,20,10,.3);border-top-color:#04140a;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:9px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* pair code reveal */
+.code{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:clamp(30px,8vw,40px);letter-spacing:10px;font-weight:700;color:#eafff3;margin:18px 0 8px;padding:18px 8px;border-radius:16px;background:rgba(0,255,102,.07);border:1px solid rgba(0,255,102,.35);text-shadow:0 0 26px rgba(0,255,102,.8);animation:codeglow 2.4s ease-in-out infinite}
+@keyframes codeglow{50%{box-shadow:0 0 40px rgba(0,255,102,.4)}}
+.code .ch{display:inline-block;animation:drop .5s cubic-bezier(.2,.9,.3,1) both}
+@keyframes drop{from{opacity:0;transform:translateY(-18px) scale(1.4)}to{opacity:1;transform:none}}
+.reveal-steps{margin-top:14px;text-align:left;color:#8fae9e;font-size:12.5px;line-height:2.1;border-top:1px solid rgba(0,255,102,.12);padding-top:14px}
+.reveal-steps b{color:#00ff66}
+
+.foot{position:relative;z-index:10;margin-top:20px;font-size:10.5px;letter-spacing:3px;text-transform:uppercase;color:#3f5a4c;animation:rise 1s .4s both}
+@media (max-width:420px){.card{padding:28px 20px 22px}.brand{margin-bottom:16px}}
+</style></head><body>
+
+<div class="cloudlayer l1"></div>
+<div class="cloudlayer l2"></div>
+<div class="cloudlayer l3"></div>
+<canvas id="bolt"></canvas>
+<canvas id="rain"></canvas>
+<div id="flash"></div>
+
+<div class="brand">
+<h1><span class="brandname">EVIL<sup>666</sup></span> <span class="g">|</span> <span class="brandname">ZISKY</span></h1>
+<div class="sub">WhatsApp Pairing Portal</div>
+<div class="net"><i></i>Storm Network Active</div>
 </div>
-<footer>evil\u2076\u2076\u2076MD \u00b7 storm edition</footer>
-<div class="hint-audio" id="ahint">🔊 tap anywhere once to wake the storm audio</div>
+
+<div class="card" id="card">
+<div class="status" id="status"><i></i><span id="stxt">establishing link</span></div>
+<div id="box"></div>
+</div>
+<div class="foot">evil\u2076\u2076\u2076MD \u00b7 zisky node \u00b7 storm edition</div>
 
 <script>
-var code=null, raining=false, audioReady=false, actx=null, rainNode=null, rainGain=null, rumbleTimer=null;
-function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+"use strict";
+/* ============================ STATE ============================ */
+var code=null, phase="idle", actx=null, master=null, rainSrc=null, rainGain=null, thunderTimer=null;
+var BOLTS=[], DROPS=[], boltC=document.getElementById("bolt"), rainC=document.getElementById("rain");
+var bx=boltC.getContext("2d"), rx=rainC.getContext("2d");
 
-/* ---------- AUDIO (all synthesized, no files) ---------- */
+function sizeCanvases(){[boltC,rainC].forEach(function(c){c.width=innerWidth;c.height=innerHeight});BOLTS=[];DROPS=[];seedRain();}
+addEventListener("resize",sizeCanvases);
+
+/* ============================ AUDIO ============================ */
 function initAudio(){
-  if(audioReady)return; audioReady=true;
-  try{
-    actx=new (window.AudioContext||window.webkitAudioContext)();
-    // master
-    var master=actx.createGain(); master.gain.value=.9; master.connect(actx.destination);
-    window._master=master;
-  }catch(e){audioReady=false}
-  document.getElementById('ahint').style.display='none';
+  if(actx)return;
+  try{actx=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return}
+  master=actx.createGain();master.gain.value=.85;master.connect(actx.destination);
+  if(actx.state==="suspended")actx.resume();
 }
-function thunderBoom(intensity){
+/* layered synthesized thunder: crack (broadband burst) + roll (filtered noise tail) + sub */
+function thunder(big){
   if(!actx)return;
-  var dur=2.2+Math.random()*1.5;
-  var buf=actx.createBuffer(1,actx.sampleRate*dur,actx.sampleRate);
-  var d=buf.getChannelData(0);
-  for(var i=0;i<d.length;i++){ d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.6); }
-  var src=actx.createBufferSource(); src.buffer=buf;
-  var lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=120+Math.random()*160; lp.Q.value=.7;
-  var g=actx.createGain();
-  var v=(intensity||1)*.85;
-  g.gain.setValueAtTime(v,actx.currentTime);
-  g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);
-  src.connect(lp); lp.connect(g); g.connect(window._master);
-  src.start();
-  // sub rumble
-  var o=actx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(46,actx.currentTime);
-  o.frequency.exponentialRampToValueAtTime(24,actx.currentTime+dur*.8);
-  var og=actx.createGain(); og.gain.setValueAtTime(v*.5,actx.currentTime);
-  og.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);
-  o.connect(og); og.connect(window._master); o.start(); o.stop(actx.currentTime+dur);
+  var t=actx.currentTime, dur=2.6+Math.random()*2.2, v=big?1:.45;
+  var buf=actx.createBuffer(1,actx.sampleRate*dur,actx.sampleRate),d=buf.getChannelData(0);
+  for(var i=0;i<d.length;i++){var p=i/d.length;d[i]=(Math.random()*2-1)*Math.pow(1-p,1.5)*(p<.06?3:1);}
+  var src=actx.createBufferSource();src.buffer=buf;
+  var lp=actx.createBiquadFilter();lp.type="lowpass";lp.frequency.setValueAtTime(big?2600:900,t);lp.frequency.exponentialRampToValueAtTime(90,t+dur);lp.Q.value=.6;
+  var g=actx.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.9*v,t+.02);g.gain.exponentialRampToValueAtTime(.001,t+dur);
+  src.connect(lp);lp.connect(g);g.connect(master);src.start(t);
+  var o=actx.createOscillator();o.type="sine";o.frequency.setValueAtTime(52,t);o.frequency.exponentialRampToValueAtTime(22,t+dur*.85);
+  var og=actx.createGain();og.gain.setValueAtTime(.55*v,t);og.gain.exponentialRampToValueAtTime(.001,t+dur);
+  o.connect(og);og.connect(master);o.start(t);o.stop(t+dur);
+  var c=actx.createOscillator();c.type="sawtooth";c.frequency.setValueAtTime(320,t);c.frequency.exponentialRampToValueAtTime(60,t+.28);
+  var cg=actx.createGain();cg.gain.setValueAtTime(big?.5:.18,t);cg.gain.exponentialRampToValueAtTime(.001,t+.3);
+  c.connect(cg);cg.connect(master);c.start(t);c.stop(t+.32);
 }
-function startRain(){
-  if(!actx||rainNode)return;
-  var dur=2;
-  var buf=actx.createBuffer(1,actx.sampleRate*dur,actx.sampleRate);
-  var d=buf.getChannelData(0);
-  for(var i=0;i<d.length;i++){ d[i]=(Math.random()*2-1); }
-  var src=actx.createBufferSource(); src.buffer=buf; src.loop=true;
-  var bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=5200; bp.Q.value=.4;
-  var lp=actx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=7000;
-  rainGain=actx.createGain(); rainGain.gain.setValueAtTime(0,actx.currentTime);
-  rainGain.gain.linearRampToValueAtTime(.16,actx.currentTime+2.5); // fade in as thunder fades
-  src.connect(bp); bp.connect(lp); lp.connect(rainGain); rainGain.connect(window._master);
-  src.start(); rainNode=src;
+function thunderVolume(v){if(thunderTimer)clearTimeout(thunderTimer);thunderTimer=null;if(v<=0){phase=(phase==="idle")?"idle":phase;return}}
+function startRainSound(){
+  if(!actx||rainSrc)return;
+  var dur=1.6,buf=actx.createBuffer(1,actx.sampleRate*dur,actx.sampleRate),d=buf.getChannelData(0);
+  for(var i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  rainSrc=actx.createBufferSource();rainSrc.buffer=buf;rainSrc.loop=true;
+  var bp=actx.createBiquadFilter();bp.type="bandpass";bp.frequency.value=4800;bp.Q.value=.35;
+  var hs=actx.createBiquadFilter();hs.type="highshelf";hs.frequency.value=6000;hs.gain.value=-6;
+  rainGain=actx.createGain();rainGain.gain.setValueAtTime(0,actx.currentTime);
+  rainGain.gain.linearRampToValueAtTime(.14,actx.currentTime+3.5);
+  rainSrc.connect(bp);bp.connect(hs);hs.connect(rainGain);rainGain.connect(master);
+  rainSrc.start();
 }
-function stopRain(){
-  if(!rainNode)return;
-  try{ rainGain.gain.linearRampToValueAtTime(0,actx.currentTime+1.5); var n=rainNode; setTimeout(function(){try{n.stop()}catch(e){}},1700);}catch(e){}
-  rainNode=null;
+function fadeRainSound(){
+  if(!rainSrc)return;
+  try{rainGain.gain.linearRampToValueAtTime(.0001,actx.currentTime+4);var n=rainSrc;setTimeout(function(){try{n.stop()}catch(e){}},4200);}catch(e){}
+  rainSrc=null;
 }
 
-/* ---------- LIGHTNING ---------- */
-function strike(intense){
-  var b=Math.random()<.5?document.getElementById('boltL'):document.getElementById('boltR');
-  b.classList.remove('on'); void b.offsetWidth; b.classList.add('on');
-  var f=document.getElementById('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
-  if(intense){
-    var g=document.getElementById('gw'); g.classList.remove('on'); void g.offsetWidth; g.classList.add('on');
-    document.body.classList.remove('shake'); void document.body.offsetWidth; document.body.classList.add('shake');
+/* ============================ LIGHTNING (canvas, branching) ============================ */
+function makeBolt(){
+  var x0=innerWidth*(0.12+Math.random()*0.76), y0=innerHeight*(0.02+Math.random()*0.14);
+  var y1=innerHeight*(0.35+Math.random()*0.3);
+  var segs=[],x=x0,y=y0;
+  while(y<y1){var ny=y+8+Math.random()*22,nx=x+(Math.random()-0.5)*34;segs.push([x,y,nx,ny]);x=nx;y=ny;}
+  var branches=[];
+  var nb=1+Math.floor(Math.random()*3);
+  for(var b=0;b<nb;b++){
+    var i0=6+Math.floor(Math.random()*(segs.length-14));
+    var s=segs[i0];if(!s)continue;
+    var bx0=s[2],by0=s[3],dx=(Math.random()<.5?-1:1)*(14+Math.random()*30),byy=by0;
+    var arr=[];
+    for(var k=0;k<4+Math.random()*6;k++){var ny2=byy+10+Math.random()*18,nx2=bx0+dx*(k/6)+(Math.random()-.5)*10;arr.push([bx0,byy,nx2,ny2]);bx0=nx2;byy=ny2;}
+    branches.push(arr);
+  }
+  return {segs:segs,branches:branches,life:1};
+}
+function drawBolts(){
+  bx.clearRect(0,0,boltC.width,boltC.height);
+  for(var i=BOLTS.length-1;i>=0;i--){
+    var b=BOLTS[i];b.life-=.055;
+    if(b.life<=0){BOLTS.splice(i,1);continue}
+    bx.strokeStyle="rgba(220,255,225,"+(b.life*.95)+")";
+    bx.lineWidth=2.4;bx.shadowColor="rgba(0,255,102,"+(b.life*.9)+")";bx.shadowBlur=18;
+    bx.beginPath();b.segs.forEach(function(s,j){j?bx.lineTo(s[2],s[3]):bx.moveTo(s[0],s[1])});bx.stroke();
+    bx.lineWidth=1.2;bx.shadowBlur=10;
+    b.branches.forEach(function(arr){bx.beginPath();arr.forEach(function(s,j){j?bx.lineTo(s[2],s[3]):bx.moveTo(s[0],s[1])});bx.stroke()});
+  }
+  requestAnimationFrame(drawBolts);
+}
+function strike(big){
+  BOLTS.push(makeBolt());
+  if(Math.random()<.5)setTimeout(function(){BOLTS.push(makeBolt())},60+Math.random()*120);
+  var f=document.getElementById("flash");
+  f.classList.remove("hit","hit2");void f.offsetWidth;f.classList.add("hit");
+  if(big){f.classList.add("hit2");
+    document.body.classList.remove("quake");void document.body.offsetWidth;document.body.classList.add("quake");
+    setTimeout(function(){document.body.classList.remove("quake")},450);
+  }
+  thunder(big);
+}
+
+/* ============================ RAIN (particles) ============================ */
+function seedRain(){for(var i=0;i<220;i++)DROPS.push({x:Math.random()*rainC.width,y:Math.random()*rainC.height,l:9+Math.random()*16,v:10+Math.random()*8,o:.25+Math.random()*.5});}
+var rainIntensity=0;
+function drawRain(){
+  rx.clearRect(0,0,rainC.width,rainC.height);
+  if(rainIntensity>0){
+    var n=Math.floor(DROPS.length*Math.min(rainIntensity,1));
+    rx.lineWidth=1.1;rx.strokeStyle="rgba(0,255,102,.28)";rx.shadowColor="rgba(0,255,102,.4)";rx.shadowBlur=4;
+    rx.beginPath();
+    for(var i=0;i<n;i++){var d=DROPS[i];d.y+=d.v*(0.6+rainIntensity*.7);d.x-=1.4;
+      if(d.y>rainC.height){d.y=-16;d.x=Math.random()*rainC.width}
+      rx.globalAlpha=d.o*Math.min(rainIntensity,1);
+      rx.moveTo(d.x,d.y);rx.lineTo(d.x-2.6,d.y+d.l);}
+    rx.stroke();rx.globalAlpha=1;
+  }
+  requestAnimationFrame(drawRain);
+}
+
+/* ============================ AMBIENT LOOP ============================ */
+function ambient(){
+  if(phase==="idle"){
+    if(Math.random()<.5)strike(Math.random()<.35);
+    thunderTimer=setTimeout(ambient,15000+Math.random()*30000);
+  } else if(phase==="generating"){
+    if(Math.random()<.25)strike(false);
+    thunderTimer=setTimeout(ambient,6000+Math.random()*9000);
   }
 }
-function stormLoop(){
-  if(raining)return; // calm during code gen
-  var intense=Math.random()<.4;
-  strike(intense);
-  setTimeout(function(){ thunderBoom(intense?1:.45); },140+Math.random()*260);
-  rumbleTimer=setTimeout(stormLoop, 2600+Math.random()*4200);
-}
 
-/* ---------- RAIN CANVAS ---------- */
-var drops=[];
-function initRainCanvas(){
-  var c=document.getElementById('rain'); c.width=innerWidth; c.height=innerHeight;
-  var x=c.getContext('2d');
-  for(var i=0;i<160;i++)drops.push({x:Math.random()*c.width,y:Math.random()*c.height,l:10+Math.random()*18,v:9+Math.random()*7});
-  (function loop(){
-    x.clearRect(0,0,c.width,c.height);
-    x.strokeStyle='rgba(160,220,190,.35)'; x.lineWidth=1;
-    x.beginPath();
-    for(var i=0;i<drops.length;i++){var d=drops[i]; d.y+=d.v; d.x-=1.2; if(d.y>c.height){d.y=-20;d.x=Math.random()*c.width}
-      x.moveTo(d.x,d.y); x.lineTo(d.x-3,d.y+d.l);}
-    x.stroke(); requestAnimationFrame(loop);
-  })();
+/* ============================ UI ============================ */
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c]})}
+function setBox(html){document.getElementById("box").innerHTML=html}
+function setStatus(cls,txt){var s=document.getElementById("status");s.className="status "+cls;document.getElementById("stxt").textContent=txt}
+function form(){setBox('<label>Enter WhatsApp Number</label><div class="field"><input id="n" inputmode="tel" maxlength="15" placeholder="+234  xxx  xxx  xxxx"></div><button id="go">Generate Pair Code</button>');
+  var g=document.getElementById("go");g.onclick=pair;
+  var n=document.getElementById("n");n.addEventListener("keydown",function(e){if(e.key==="Enter")pair()});
 }
-initRainCanvas();
-
-/* ---------- UI ---------- */
-function form(){return '<input id="n" inputmode="numeric" maxlength="15" placeholder="number e.g. 228 73 272 569"><button id="go">\u26a1 Summon pairing code</button>'}
 function render(){
-  var x=document.getElementById('box');
   if(code){
-    x.innerHTML='<div>\U0001f4f1 your code \u2014 type it fast</div><div class="code">'+code.split('').map(function(ch,i){return '<span class="ch" style="animation-delay:'+(i*60)+'ms">'+esc(ch)+'</span>'}).join('')+'</div><div class="steps"><b>1.</b> WhatsApp \u2192 Settings \u2192 Linked Devices \u2192 Link a Device<br><b>2.</b> Tap <b>\u201cLink with phone number instead\u201d</b><br><b>3.</b> Type the code \u2014 done \u26a1</div>';
-  } else x.innerHTML=form();
-  var g=document.getElementById('go'); if(g)g.onclick=pair;
-  var n=document.getElementById('n'); if(n)n.addEventListener('keydown',function(e){if(e.key==='Enter')pair()});
+    setBox('<div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#7da291;margin-top:6px">Pair Code Ready</div><div class="code">'+code.split("").map(function(ch,i){return '<span class="ch" style="animation-delay:'+(i*55)+'ms">'+esc(ch)+"</span>"}).join("")+"</div>"+
+      '<div class="reveal-steps"><b>01</b> \u2014 WhatsApp \u203a Settings \u203a Linked Devices \u203a Link a Device<br><b>02</b> \u2014 Choose \u201cLink with phone number instead\u201d<br><b>03</b> \u2014 Enter the code before it expires</div>');
+    var c=document.getElementById("card");c.classList.remove("pulse");void c.offsetWidth;c.classList.add("pulse");
+    /* code-ready: bright flash */
+    strike(true);
+  } else form();
 }
 async function pair(){
-  var n=document.getElementById('n').value.replace(/[^0-9]/g,'');
-  if(!n)return;
-  var b=document.getElementById('go'); b.disabled=true; b.innerHTML='<span class="spin"></span>Summoning\u2026';
-  // calm the storm, start the rain
-  raining=true; clearTimeout(rumbleTimer);
-  startRain(); document.getElementById('rain').classList.add('on');
-  setBadge('','drawing lightning\u2026');
-  var j=await (await fetch('/pair?number='+n)).json();
-  if(j.error){ b.disabled=false; b.innerHTML='\u26a1 Summon pairing code'; setBadge('err',j.error); raining=false; stormLoop(); return }
-  code=j.code; render(); setBadge('ok','code ready \u2014 ~2 min');
-  setTimeout(function(){ raining=false; stopRain(); document.getElementById('rain').classList.remove('on'); stormLoop(); }, 12000);
+  var n=document.getElementById("n").value.replace(/[^0-9]/g,"");
+  if(!n){setStatus("err","enter a number first");return}
+  phase="generating";
+  var b=document.getElementById("go");b.disabled=true;b.innerHTML='<span class="spin"></span>Summoning';
+  setStatus("busy","contacting storm network");
+  document.body.classList.add("storm-dark");
+  rainIntensity=0; (function ramp(){ if(phase!=="generating")return; rainIntensity=Math.min(rainIntensity+.012,.9); requestAnimationFrame(ramp); })();
+  rainC.classList.add("on"); startRainSound();
+  ambient();
+  try{
+    var j=await (await fetch("/pair?number="+n)).json();
+    if(j.error){b.disabled=false;b.textContent="Generate Pair Code";setStatus("err",j.error);phase="idle";return}
+    code=j.code;phase="ready";render();setStatus("ok","code ready \u2014 expires soon");
+    setTimeout(function(){rainIntensity=.35;},3000);
+  }catch(e){setStatus("err","network unreachable");b.disabled=false;b.textContent="Generate Pair Code";phase="idle";}
 }
-function setBadge(t,txt){var b=document.getElementById('badge');b.className='badge '+(t||'');document.getElementById('btxt').textContent=txt}
 async function refresh(){
   try{
-    var s=await (await fetch('/status')).json();
-    if(s.connected){setBadge('ok','connected as +'+s.user);document.getElementById('box').innerHTML='<div class="steps" style="text-align:center;font-size:14px">\u26a1 Bot is live \u2014 type <b>.menu</b> on WhatsApp</div>';clearTimeout(rumbleTimer);return}
-    if(s.pairingCode&&!code){code=s.pairingCode;render();setBadge('ok','code ready \u2014 ~2 min');return}
-    if(!code&&!document.getElementById('n'))render();
-  }catch(e){setBadge('err','connection lost \u2014 retrying\u2026')}
+    var s=await (await fetch("/status")).json();
+    if(s.connected){setStatus("ok","connected \u2014 +"+s.user);setBox('<div style="font-size:13px;color:#8fae9e;line-height:2">Session live. Type <b style="color:#00ff66">.menu</b> on WhatsApp.</div>');return}
+    if(s.pairingCode&&!code){code=s.pairingCode;phase="ready";render();setStatus("ok","code ready \u2014 expires soon");return}
+    if(!code&&phase!=="generating"&&!document.getElementById("n"))form();
+  }catch(e){setStatus("err","connection lost \u2014 retrying")}
 }
-// wake audio on any first interaction
-['pointerdown','keydown','touchstart'].forEach(function(ev){window.addEventListener(ev,function(){initAudio();if(!raining&&!rumbleTimer)stormLoop();},{once:false,passive:true});
-  window.removeEventListener(ev,arguments.callee)});
-render();refresh();setInterval(refresh,4000);
+
+/* wake audio on first interaction */
+function wake(){initAudio();if(phase==="idle"&&!thunderTimer)ambient();}
+["pointerdown","keydown","touchstart"].forEach(function(ev){addEventListener(ev,wake,{passive:true})});
+
+sizeCanvases();form();refresh();setInterval(refresh,4000);requestAnimationFrame(drawBolts);requestAnimationFrame(drawRain);
+setTimeout(function(){if(!actx)ambient()},800); /* visual lightning even before audio wake */
 </script></body></html>`;
