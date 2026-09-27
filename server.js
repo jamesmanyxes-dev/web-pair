@@ -399,12 +399,14 @@ function makeBolt(){
   return {segs:segs,branches:branches,life:1};
 }
 function drawBolts(){
+  try{
   var now=performance.now();
   FLASHL=Math.max(0,FLASHL-0.06);
   fx.clearRect(0,0,fc.width,fc.height);
   for(var t of TREES) drawTree(t, FLASHL, now);
   monkeyThink(now);
   drawMonkey(FLASHL, now);
+  }catch(e){ /* one bad frame must not kill the loop */ }
   bx.clearRect(0,0,boltC.width,boltC.height);
   for(var i=BOLTS.length-1;i>=0;i--){
     var b=BOLTS[i];b.life-=.055;
@@ -461,7 +463,7 @@ function buildForest(){
             {x:innerWidth*0.22, w:0.05*innerWidth, lean:0.03, branches:4, far:true},
             {x:innerWidth*0.8, w:0.055*innerWidth, lean:-0.04, branches:4, far:true}];
   for (var d of defs){
-    var tr={x:d.x,w:d.w,lean:d.lean,far:!!d.far,branches:[]};
+    var tr={x:d.x,w:d.w,lean:d.lean,far:!!d.far,side:(d.x<innerWidth/2?1:-1),branches:[]};
     var nb=d.branches;
     for (var i=0;i<nb;i++){
       var h=0.25+i*(0.6/nb)+Math.random()*0.05;
@@ -474,8 +476,8 @@ function drawTree(t, flashL, time){
   var H=fc.height, baseY=H;
   var sway=Math.sin(time/2300 + t.x)*( (t.far?3:6) ) + Math.sin(time/700+t.x)* (flashL>0?2:1);
   var topX=t.x + t.lean*H*0.3 + sway;
-  var color = t.far ? "rgba(10,16,14,"+(0.75+flashL*0.25)+")" : "rgba(4,8,7,"+(0.95+flashL*0.05)+")";
-  var litColor = t.far ? "rgba(40,52,46,1)" : "rgba(24,32,27,1)";
+  var color = t.far ? "rgba(26,38,32,0.9)" : "rgba(16,26,21,0.98)";
+  var litColor = t.far ? "rgba(90,110,98,1)" : "rgba(70,92,78,1)";
   fx.strokeStyle = flashL>0 ? blendCss(color, litColor, flashL) : color;
   fx.lineWidth=t.w; fx.lineCap="round";
   fx.beginPath(); fx.moveTo(t.x,baseY);
@@ -494,7 +496,7 @@ function drawTree(t, flashL, time){
     fx.stroke();
   }
   /* canopy blobs */
-  fx.fillStyle = flashL>0 ? blendCss("rgba(6,12,10,0.9)","rgba(52,70,60,1)",flashL) : "rgba(6,12,10,0.9)";
+  fx.fillStyle = flashL>0 ? blendCss("rgba(14,22,18,0.95)","rgba(96,120,104,1)",flashL) : "rgba(14,22,18,0.95)";
   for (var c of t.branches){
     if(c.h<0.3)continue;
     var y=H*(1-c.h*0.88);
@@ -543,118 +545,138 @@ function drawMonkey(flashL, time){
   var W=mc.width=innerWidth, H=mc.height=innerHeight;
   mx.clearRect(0,0,W,H);
   var tr=TREES[MK.hostTree]||TREES[0];
+  var side = tr.side || 1;
   var sway=Math.sin(time/2300 + tr.x)*6;
   var trunkX = tr.x + tr.lean*H*0.3*(1-MK.y) + sway*(1-MK.y);
   var trunkTopX = tr.x + tr.lean*H*0.3 + sway;
   var bx = trunkX + (trunkTopX-trunkX)*MK.y;         /* monkey x follows trunk */
   var by = H*(1-MK.y*0.86) - H*0.06;                  /* monkey y */
-  var s = Math.max(0.55, tr.w/60) * (innerWidth<720?0.7:1);  /* scale */
-  var fur = flashL>0 ? [92,64,44] : [44,30,22];      /* fur colors lit vs dark */
-  var furHi = flashL>0 ? [140,100,70] : [70,50,36];
-  var skin = flashL>0 ? [230,190,160] : [110,80,60];
+  var s = Math.max(0.5, (tr.w||60)/90) * (innerWidth<720?0.72:1);
+  if(!isFinite(s)||s<=0) s=1;
 
-  function F(c,a){return "rgba("+(c[0]|0)+","+(c[1]|0)+","+(c[2]|0)+","+(a||1)+")";}
+  var fur    = flashL>0.02 ? [96,66,44]  : [40,27,20];
+  var furHi  = flashL>0.02 ? [150,106,72]: [66,46,33];
+  var face   = flashL>0.02 ? [224,188,152]: [128,96,70];
+  var darkFur= [fur[0]*0.62|0, fur[1]*0.62|0, fur[2]*0.62|0];
+  function F(c,a){return "rgba("+(c[0]|0)+","+(c[1]|0)+","+(c[2]|0)+","+(a==null?1:a)+")";}
 
   var phase=MK.gait;
-  var bob = Math.sin(phase*2)*2.5*s * (MK.climbing?1:0.2);
+  var bob = Math.sin(phase*2)*2*s * (MK.climbing?1:0.15);
   var bodyY = by + bob;
-  var bodyLean = tr.side * (MK.climbing?0.14:0.05) + Math.sin(phase)*0.05;
-  var bodyX = bx;
+  var bodyX = bx + side*7*s;          /* hug the trunk: body slightly off it */
+  var lean = side*0.16;
 
-  /* TAIL (curly, wagging) */
-  var tailEnd = MK.tailWag*0.5;
-  mx.strokeStyle=F(fur,0.95); mx.lineWidth=4.5*s; mx.lineCap="round";
+  /* ---- LIMB helper: two segments with a visible joint + gripping hand ---- */
+  function limb(x1,y1, x2,y2, jointBend, w, c, gripR){
+    var jx=(x1+x2)/2 + jointBend, jy=(y1+y2)/2;
+    mx.strokeStyle=F(c); mx.lineWidth=w*s; mx.lineCap="round";
+    mx.beginPath(); mx.moveTo(x1,y1); mx.quadraticCurveTo(jx,jy,x2,y2); mx.stroke();
+    /* grip hand/foot: small dark pads */
+    mx.fillStyle=F(face,0.9);
+    mx.beginPath(); mx.ellipse(x2,y2, 3.4*s, 2.6*s, gripR||0.3, 0, Math.PI*2); mx.fill();
+    mx.fillStyle=F([30,20,14],0.55);
+    mx.beginPath(); mx.ellipse(x2,y2, 2*s, 1.5*s, gripR||0.3, 0, Math.PI*2); mx.fill();
+  }
+
+  /* trunk surface x at a given height (for grips) */
+  function trunkAt(hFrac){
+    var yy = H*(1-hFrac*0.86) - H*0.06;
+    var xx = trunkX + (trunkTopX-trunkX)*hFrac;
+    return {x:xx, y:yy};
+  }
+
+  /* ---- gait: diagonal pairs alternate ---- */
+  var g=Math.sin(phase), g2=Math.sin(phase+Math.PI);
+  var reach=15*s;
+
+  /* grips ON the trunk (hands above, feet below) */
+  var handTop   = trunkAt(Math.min(0.98, MK.y+0.028+g2*0.012));
+  var handBot   = trunkAt(Math.min(0.98, MK.y+0.012+g*0.012));
+  var footTop   = trunkAt(Math.max(0.05, MK.y-0.03+g*0.012));
+  var footBot   = trunkAt(Math.max(0.05, MK.y-0.048+g2*0.012));
+
+  /* FAR LEG (darker, behind body) */
+  limb(bodyX - side*3*s, bodyY+10*s, footBot.x - side*1*s, footBot.y+6*s, side*6*s, 5, darkFur, -0.4);
+  /* FAR ARM */
+  limb(bodyX - side*4*s, bodyY-8*s,  handBot.x - side*1*s, handBot.y-4*s, side*-5*s, 4.6, darkFur, 0.5);
+
+  /* ---- TAIL: long curling rear limb ---- */
+  var tw=MK.tailWag;
+  mx.strokeStyle=F(darkFur,0.95); mx.lineWidth=3.4*s; mx.lineCap="round";
   mx.beginPath();
-  mx.moveTo(bodyX - tr.side*6*s, bodyY-2*s);
-  mx.quadraticCurveTo(bodyX - tr.side*26*s, bodyY+2*s+tailEnd*8, bodyX - tr.side*18*s, bodyY-24*s+Math.sin(MK.tailWag)*6*s);
-  mx.quadraticCurveTo(bodyX - tr.side*10*s, bodyY-40*s, bodyX - tr.side*20*s, bodyY-34*s);
+  mx.moveTo(bodyX - side*9*s, bodyY+8*s);
+  mx.bezierCurveTo(
+    bodyX - side*30*s, bodyY+14*s+Math.sin(tw)*4*s,
+    bodyX - side*34*s, bodyY-6*s+Math.cos(tw*0.8)*6*s,
+    bodyX - side*24*s, bodyY-20*s+Math.sin(tw*1.3)*5*s);
   mx.stroke();
 
-  /* LEGS (far pair drawn first, darker) */
-  function drawLimb(hipX, hipY, footX, footY, width, dark){
-    var c = dark ? [fur[0]*0.7, fur[1]*0.7, fur[2]*0.7] : fur;
-    var midX=(hipX+footX)/2 + (footY<hipY?6:-2)*s, midY=(hipY+footY)/2;
-    mx.strokeStyle=F(c); mx.lineWidth=width*s; mx.lineCap="round";
-    mx.beginPath(); mx.moveTo(hipX,hipY); mx.quadraticCurveTo(midX,midY,footX,footY); mx.stroke();
-    /* hand/foot */
-    mx.fillStyle=F(skin);
-    mx.beginPath(); mx.ellipse(footX,footY, 4.5*s, 3*s, 0.4, 0, Math.PI*2); mx.fill();
-  }
-  var gripL = Math.sin(phase), gripR = Math.sin(phase+Math.PI);
-  /* leg grips slide along trunk as the body moves */
-  var legReach = 14*s;
-  var rLegY = bodyY+16*s + gripR*legReach*0.5;
-  var lLegY = bodyY+16*s + gripL*legReach*0.5;
-  drawLimb(bodyX+tr.side*2*s, bodyY+12*s, bodyX - tr.side*4*s + (trunkX-bx)*0.4, rLegY, 5.5, true);
-  drawLimb(bodyX+tr.side*3*s, bodyY+12*s, bodyX - tr.side*2*s + (trunkX-bx)*0.4, lLegY, 5.5, false);
-
-  /* TORSO (rounded, furred) */
-  var grad=mx.createRadialGradient(bodyX-tr.side*4*s, bodyY-6*s, 2, bodyX, bodyY, 16*s);
-  grad.addColorStop(0, F(furHi));
-  grad.addColorStop(1, F(fur));
+  /* ---- TORSO ---- */
+  var grad=mx.createRadialGradient(bodyX-side*3*s, bodyY-5*s, 2, bodyX, bodyY, 15*s);
+  grad.addColorStop(0,F(furHi)); grad.addColorStop(1,F(fur));
   mx.fillStyle=grad;
   mx.beginPath();
-  mx.ellipse(bodyX, bodyY, 11*s, 14*s, bodyLean, 0, Math.PI*2);
+  mx.ellipse(bodyX, bodyY, 10*s, 13*s, lean, 0, Math.PI*2);
   mx.fill();
-  /* fur strokes along back */
-  mx.strokeStyle=F([furHi[0],furHi[1],furHi[2]],0.5); mx.lineWidth=1*s;
-  for(var f=0;f<7;f++){
-    var fa=-0.9+f*0.28;
-    mx.beginPath();
-    mx.moveTo(bodyX+Math.cos(fa)*9*s, bodyY+Math.sin(fa)*11*s);
-    mx.lineTo(bodyX+Math.cos(fa)*13*s, bodyY+Math.sin(fa)*15*s);
-    mx.stroke();
+  /* back fur ridge strokes */
+  mx.strokeStyle=F(furHi,0.45); mx.lineWidth=1.1*s;
+  for(var f=0;f<8;f++){
+    var fa=-1.1+f*0.3;
+    var fx1=bodyX+Math.cos(fa)*8*s, fy1=bodyY+Math.sin(fa)*10*s;
+    var fx2=bodyX+Math.cos(fa)*12.5*s, fy2=bodyY+Math.sin(fa)*15*s;
+    mx.beginPath(); mx.moveTo(fx1,fy1); mx.lineTo(fx2,fy2); mx.stroke();
   }
-  /* light belly */
-  mx.fillStyle=F(flashL>0?[210,180,150]:[120,92,70],0.8);
-  mx.beginPath(); mx.ellipse(bodyX - tr.side*6*s, bodyY+2*s, 5.5*s, 8*s, bodyLean, 0, Math.PI*2); mx.fill();
+  /* belly patch */
+  mx.fillStyle=F(flashL>0.02?[214,178,146]:[104,80,60],0.85);
+  mx.beginPath(); mx.ellipse(bodyX-side*5*s, bodyY+3*s, 5*s, 7.5*s, lean, 0, Math.PI*2); mx.fill();
 
-  /* ARMS (near pair on top) */
-  var armReach=16*s;
-  var rArmY = bodyY-10*s - gripR*armReach*0.6;
-  var lArmY = bodyY-10*s - gripL*armReach*0.6;
-  var armX = bodyX + tr.side*6*s;
-  drawLimb(bodyX+tr.side*8*s, bodyY-6*s, armX + tr.side*4*s, rArmY, 5, false);
-  drawLimb(bodyX+tr.side*8*s, bodyY-6*s, armX + tr.side*5*s, lArmY, 5, false);
+  /* NEAR LEG */
+  limb(bodyX + side*2*s, bodyY+11*s, footTop.x + side*1.5*s, footTop.y+7*s, side*5*s, 5.4, fur, -0.3);
+  /* NEAR ARM (reaching up) */
+  limb(bodyX + side*5*s, bodyY-7*s, handTop.x + side*2*s, handTop.y-5*s, side*-4*s, 5, fur, 0.4);
 
-  /* HEAD (with natural movement) */
-  var headTurn = MK.headTurn*0.6;
-  var headX = bodyX + tr.side*7*s;
-  var headY = bodyY-20*s + Math.sin(MK.breath)*1.2*s + (MK.alert?-2*s:0);
-  var hgrad=mx.createRadialGradient(headX-tr.side*2*s, headY-2*s, 1, headX, headY, 9*s);
-  hgrad.addColorStop(0,F(furHi));
-  hgrad.addColorStop(1,F(fur));
+  /* ---- HEAD (turned by MK.headTurn) ---- */
+  var ht = MK.headTurn;                    /* -0.25..0.25 */
+  var headX = bodyX + side*8*s + Math.abs(ht)*4*s*side;
+  var headY = bodyY-21*s + Math.sin(MK.breath)*1.1*s + (MK.alert>0?-2*s:0);
+  var hgrad=mx.createRadialGradient(headX-side*2*s, headY-2*s, 1, headX, headY, 8.6*s);
+  hgrad.addColorStop(0,F(furHi)); hgrad.addColorStop(1,F(fur));
   mx.fillStyle=hgrad;
-  mx.beginPath(); mx.ellipse(headX, headY, 8*s, 7.4*s, tr.side*0.08, 0, Math.PI*2); mx.fill();
-  /* face (muzzle) */
-  mx.fillStyle=F(skin, flashL>0?1:0.85);
-  mx.beginPath(); mx.ellipse(headX + tr.side*4*s - headTurn*4*s, headY+2.5*s, 5*s, 4.4*s, 0, 0, Math.PI*2); mx.fill();
-  /* brow/forehead fur ridge */
-  mx.fillStyle=F(fur,0.9);
-  mx.beginPath(); mx.ellipse(headX+tr.side*2*s, headY-3.5*s, 6*s, 3.4*s, 0, 0, Math.PI*2); mx.fill();
-  /* eyes (visible on flash/alert) */
-  var eyeA = flashL>0.15 || MK.alert>0 ? 0.95 : 0.55;
-  mx.fillStyle="rgba(20,14,10,"+eyeA+")";
-  mx.beginPath(); mx.arc(headX+tr.side*5.4*s - headTurn*4*s, headY+0.5*s, 1.15*s, 0, Math.PI*2); mx.fill();
-  mx.beginPath(); mx.arc(headX+tr.side*2.2*s - headTurn*3*s, headY+0.8*s, 1.05*s, 0, Math.PI*2); mx.fill();
+  mx.beginPath(); mx.ellipse(headX, headY, 7.6*s, 7*s, side*0.06, 0, Math.PI*2); mx.fill();
+  /* muzzle */
+  mx.fillStyle=F(face,0.95);
+  mx.beginPath(); mx.ellipse(headX+side*4.4*s - ht*4*s, headY+2.4*s, 4.6*s, 4*s, 0, 0, Math.PI*2); mx.fill();
+  /* brow ridge */
+  mx.fillStyle=F(fur,0.92);
+  mx.beginPath(); mx.ellipse(headX+side*1.6*s, headY-3.6*s, 5.6*s, 3.2*s, 0, 0, Math.PI*2); mx.fill();
+  /* eyes: blink occasionally */
+  var blink = (Math.sin(time/1700)>0.97)?0.15:1;
+  var eyeA = (flashL>0.15||MK.alert>0?0.95:0.6)*blink;
+  mx.fillStyle="rgba(18,12,9,"+eyeA+")";
+  mx.beginPath(); mx.arc(headX+side*5*s - ht*4*s, headY+0.6*s, 1.05*s, 0, Math.PI*2); mx.fill();
+  mx.beginPath(); mx.arc(headX+side*2*s - ht*3*s, headY+0.9*s, 0.95*s, 0, Math.PI*2); mx.fill();
+  /* nose dots */
+  mx.fillStyle="rgba(60,40,30,0.7)";
+  mx.beginPath(); mx.arc(headX+side*5.6*s - ht*4*s, headY+3.4*s, 0.5*s, 0, Math.PI*2); mx.fill();
   /* ear */
-  mx.fillStyle=F(fur,0.9);
-  mx.beginPath(); mx.arc(headX - tr.side*2*s, headY-1*s, 2.6*s, 0, Math.PI*2); mx.fill();
-  mx.fillStyle=F(skin,0.8);
-  mx.beginPath(); mx.arc(headX - tr.side*2*s, headY-1*s, 1.4*s, 0, Math.PI*2); mx.fill();
-  /* alert "!" over head */
-  if(MK.alert>0){
-    mx.fillStyle="rgba(255,255,255,"+(MK.alert)+")";
-    mx.font="bold "+Math.round(15*s)+"px system-ui";
-    mx.fillText("!", headX+tr.side*8*s, headY-14*s);
+  mx.fillStyle=F(fur,0.95);
+  mx.beginPath(); mx.arc(headX-side*2.4*s, headY-0.6*s, 2.4*s, 0, Math.PI*2); mx.fill();
+  mx.fillStyle=F(face,0.75);
+  mx.beginPath(); mx.arc(headX-side*2.4*s, headY-0.6*s, 1.2*s, 0, Math.PI*2); mx.fill();
+  /* alert marker */
+  if(MK.alert>0.02){
+    mx.fillStyle="rgba(255,255,255,"+MK.alert+")";
+    mx.font="bold "+Math.round(14*s)+"px system-ui";
+    mx.fillText("!", headX+side*9*s, headY-13*s);
   }
-  /* rim light when flash */
+  /* white rim light on flash */
   if(flashL>0.05){
-    mx.strokeStyle="rgba(255,255,255,"+(flashL*0.55)+")"; mx.lineWidth=1.4*s;
-    mx.beginPath(); mx.ellipse(bodyX, bodyY, 11*s, 14*s, bodyLean, Math.PI*1.15, Math.PI*1.9); mx.stroke();
-    mx.beginPath(); mx.ellipse(headX, headY, 8*s, 7.4*s, 0, Math.PI*1.2, Math.PI*2.0); mx.stroke();
+    mx.strokeStyle="rgba(255,255,255,"+(flashL*0.5)+")"; mx.lineWidth=1.3*s;
+    mx.beginPath(); mx.ellipse(bodyX, bodyY, 10*s, 13*s, lean, Math.PI*1.1, Math.PI*1.95); mx.stroke();
+    mx.beginPath(); mx.ellipse(headX, headY, 7.6*s, 7*s, 0, Math.PI*1.2, Math.PI*2); mx.stroke();
   }
 }
+
 /* ============================ MONKEY BRAIN ============================ */
 var mkOnTree=0, mkBranchTarget=null;
 function monkeyThink(time){
