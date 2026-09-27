@@ -2,6 +2,7 @@
 const https = require('node:https');
 
 function getJSON(url, headers = {}, timeout = 12000) {
+  headers = { 'User-Agent': 'evil666MD/4.0 (WhatsApp bot; +https://github.com/jamesmanyxes-dev/web-pair)', 'Accept': 'application/json', ...(headers || {}) };
   return new Promise((resolve, reject) => {
     const req = https.get(url, { headers, timeout }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
@@ -16,8 +17,9 @@ function getJSON(url, headers = {}, timeout = 12000) {
   });
 }
 function getBuffer(url, timeout = 25000) {
+  const headers = { 'User-Agent': 'evil666MD/4.0 (WhatsApp bot)' };
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { timeout }, (res) => {
+    const req = https.get(url, { timeout, headers }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return getBuffer(res.headers.location, timeout).then(resolve, reject);
       }
@@ -126,8 +128,17 @@ ${section}
   calc: async (c) => { const r = safeCalc(c.args.join(' ')); c.send(r ? `🧮 = *${r}*` : '🧮 Usage: .calc 2+2*10'); },
   define: async (c) => {
     const w = c.args[0]; if (!w) return c.send('📖 Usage: .define <word>');
-    try { const d = await getJSON(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`); c.send(`📖 *${w}*: ${d[0]?.meanings?.[0]?.definitions?.[0]?.definition || 'not found'}`); }
-    catch { c.send('📖 Dictionary unreachable.'); }
+    try {
+      const d = await getJSON(`https://api.dictionaryapi.dev/api/v2/entries/en/${w}`);
+      c.send(`📖 *${w}*: ${d[0]?.meanings?.[0]?.definitions?.[0]?.definition || 'not found'}`);
+    } catch {
+      // primary dictionary down — try WordNet via abbreviations fallback
+      try {
+        const alt = await getJSON(`https://api.datamuse.com/words?sp=${encodeURIComponent(w)}*&max=1&md=d`);
+        const def = alt?.[0]?.defs?.[0];
+        c.send(def ? `📖 *${w}*: ${def.replace(/^n\||^v\||^adj\|/, '')}` : '📖 No definition found.');
+      } catch { c.send('📖 Dictionary unreachable.'); }
+    }
   },
   weather: async (c) => {
     const q = c.args.join(' '); if (!q) return c.send('⛅ Usage: .weather <city>');
