@@ -168,7 +168,7 @@ async function pairCode(number) {
   if (!ok || !sock) throw new Error('Bot is reconnecting — press Generate again in ~10 seconds');
   try {
     const code = await sock.requestPairingCode(number);
-    state.pairingCode = code; state.pairedFor = number;
+    state.pairingCode = code; state.pairedFor = number; state.pairingIssuedAt = Date.now();
     return code;
   } catch (e) {
     // dead socket mid-flight: nuke and tell the user to retry
@@ -181,7 +181,16 @@ async function pairCode(number) {
 
 // ── web ──
 app.get('/', (req, res) => { res.type('html'); res.set('Cache-Control', 'no-store, must-revalidate'); res.send(WEB_HTML); });
-app.get('/status', (req, res) => res.json({ ...state, chatbot: chatbotOn }));
+app.get('/status', (req, res) => {
+  const st = { ...state, chatbot: chatbotOn };
+  // pairing codes live ~2 minutes — after that a reload/returning visit gets the
+  // number form again instead of a dead code
+  if (st.pairingCode && state.pairingIssuedAt && Date.now() - state.pairingIssuedAt > 115000) {
+    st.pairingCode = null; st.pairedFor = null;
+  }
+  res.json(st);
+});
+app.get('/resetpair', (req, res) => { state.pairingCode = null; state.pairedFor = null; state.pairingIssuedAt = null; res.json({ ok: true }); });
 app.get('/pair', async (req, res) => {
   const n = String(req.query.number || '').replace(/[^0-9]/g, '');
   if (!n || n.length < 7) return res.status(400).json({ error: 'Number with country code, e.g. 22873272569' });
@@ -511,6 +520,7 @@ function render(){
 }
 function resetPair(){
   code=null;
+  try{fetch("/resetpair");}catch(e){}
   state_code_cleared=true;
   phase="idle";
   rainIntensity=0;rainC.classList.remove("on");fadeRainSound();
@@ -543,8 +553,11 @@ async function refresh(){
     if(s.connected){setStatus("ok","connected \u2014 +"+s.user);
       if(!document.getElementById("again")) setBox('<div style="font-size:13px;color:#8fae9e;line-height:2">Session live. Type <b style="color:#00ff66">.menu</b> on WhatsApp.</div><button id="again" class="ghost">Pair Another Number</button>');
       var a=document.getElementById("again"); if(a)a.onclick=resetPair; return}
-    if(s.pairingCode&&state_code_cleared){} // user explicitly reset — don't resurrect the old code
-    else if(s.pairingCode&&!code){code=s.pairingCode;phase="ready";render();setStatus("ok","code ready \u2014 expires soon");return}
+    // A fresh page load (or returning after leaving) starts at the number form.
+    // The server-side 2-min expiry already drops dead codes; we only re-show a
+    // code if THIS page session requested it (code var set in this tab).
+    if(s.pairingCode&&code===s.pairingCode){/* keep showing current code */}
+    else if(code&&s.pairingCode&&code!==s.pairingCode){/* server replaced our code — ignore */ }
     if(!code&&phase!=="generating"&&!document.getElementById("n"))form();
   }catch(e){setStatus("err","connection lost \u2014 retrying")}
 }
