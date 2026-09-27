@@ -308,6 +308,8 @@ button{width:100%;margin-top:14px;padding:15px;border:0;border-radius:14px;font-
 button:hover{transform:translateY(-2px);box-shadow:0 14px 36px -8px rgba(0,255,102,.75)}
 button:active{transform:translateY(0)}
 button:disabled{opacity:.75;cursor:wait;transform:none}
+button.ghost{background:transparent;border:1px solid rgba(0,255,102,.35);color:#00ff66;box-shadow:none;font-size:12px;padding:11px}
+button.ghost:hover{background:rgba(0,255,102,.08);box-shadow:none}
 button .spin{width:15px;height:15px;border:2px solid rgba(4,20,10,.3);border-top-color:#04140a;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-3px;margin-right:9px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -482,7 +484,22 @@ function render(){
     var c=document.getElementById("card");c.classList.remove("pulse");void c.offsetWidth;c.classList.add("pulse");
     /* code-ready: bright flash */
     strike(true);
+    setTimeout(function(){
+      var f=document.getElementById("box");
+      if(f && !f.querySelector("#again")) f.insertAdjacentHTML("beforeend",
+        '<button id="again" class="ghost">Pair Another Number</button>');
+      var a=document.getElementById("again"); if(a)a.onclick=resetPair;
+    },300);
   } else form();
+}
+function resetPair(){
+  code=null;phase="idle";
+  rainIntensity=0;rainC.classList.remove("on");fadeRainSound();
+  document.body.classList.remove("storm-dark");
+  if(thunderTimer)clearTimeout(thunderTimer);thunderTimer=null;
+  ambient();
+  render();setStatus("","enter a number to pair");
+  refresh();
 }
 async function pair(){
   var n=document.getElementById("n").value.replace(/[^0-9]/g,"");
@@ -496,7 +513,7 @@ async function pair(){
   ambient();
   try{
     var j=await (await fetch("/pair?number="+n)).json();
-    if(j.error){b.disabled=false;b.textContent="Generate Pair Code";setStatus("err",j.error);phase="idle";return}
+    if(j.error){b.disabled=false;b.textContent="Generate Pair Code";setStatus("err",j.error);phase="idle";document.body.classList.remove("storm-dark");rainC.classList.remove("on");fadeRainSound();return}
     code=j.code;phase="ready";render();setStatus("ok","code ready \u2014 expires soon");
     setTimeout(function(){rainIntensity=.35;},3000);
   }catch(e){setStatus("err","network unreachable");b.disabled=false;b.textContent="Generate Pair Code";phase="idle";}
@@ -504,7 +521,9 @@ async function pair(){
 async function refresh(){
   try{
     var s=await (await fetch("/status")).json();
-    if(s.connected){setStatus("ok","connected \u2014 +"+s.user);setBox('<div style="font-size:13px;color:#8fae9e;line-height:2">Session live. Type <b style="color:#00ff66">.menu</b> on WhatsApp.</div>');return}
+    if(s.connected){setStatus("ok","connected \u2014 +"+s.user);
+      if(!document.getElementById("again")) setBox('<div style="font-size:13px;color:#8fae9e;line-height:2">Session live. Type <b style="color:#00ff66">.menu</b> on WhatsApp.</div><button id="again" class="ghost">Pair Another Number</button>');
+      var a=document.getElementById("again"); if(a)a.onclick=resetPair; return}
     if(s.pairingCode&&!code){code=s.pairingCode;phase="ready";render();setStatus("ok","code ready \u2014 expires soon");return}
     if(!code&&phase!=="generating"&&!document.getElementById("n"))form();
   }catch(e){setStatus("err","connection lost \u2014 retrying")}
