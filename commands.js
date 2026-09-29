@@ -377,4 +377,67 @@ for (const [key, fn] of Object.entries(handlers)) table[key] = { run: fn };
 const catAliases = {};
 for (const [t, items] of Object.entries(categories)) catAliases[t] = items.map(sc);
 
+
+// ---------- uploaded evil⁶⁶⁶MD command pack (157 plugins, 380+ commands) ----------
+// Loaded dynamically from bot/plugins — never hardcoded. Each plugin keeps its
+// original code; we only adapt its (conn, mek, m, ctx) signature to the portal.
+const pluginRegistry = (() => {
+  try {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const fw = require('./bot/command');           // the framework's cmd() collector
+    const dir = path.join(__dirname, 'bot', 'plugins');
+    for (const f of fs.readdirSync(dir)) {
+      if (path.extname(f).toLowerCase() !== '.js') continue;
+      try { require(path.join(dir, f)); } catch (e) { console.error('[plugin load]', f, e.message); }
+    }
+    return fw.commands;
+  } catch (e) { console.error('[plugin pack]', e.message); return []; }
+})();
+
+const pluginCategories = {};
+
+function pluginContext(c, name) {
+  const conn = c.sock;
+  const mek = c.msg;
+  const jid = c.jid;
+  const isGroup = jid.endsWith('@g.us');
+  const sender = mek.key.fromMe ? (conn.user?.id || '') : (mek.key.participant || jid);
+  const senderNumber = String(sender).split('@')[0].split(':')[0];
+  const botNumber = String(conn.user?.id || '').split(':')[0];
+  const PREFIX = '.';
+  const body = PREFIX + name + (c.args.length ? ' ' + c.args.join(' ') : '');
+  const reply = (t) => c.send(t);
+  const text = c.args.join(' ');
+  return {
+    from: jid, quoted: mek, body, isCmd: true, command: name, args: c.args, q: text, text,
+    isGroup, sender, senderNumber, botNumber,
+    pushname: mek.pushName || 'User', isMe: senderNumber === botNumber,
+    isOwner: true, isCreator: true,
+    groupMetadata: null, groupName: '', participants: [], groupAdmins: [],
+    isBotAdmins: false, isAdmins: false,
+    reply,
+  };
+}
+
+function adaptPlugin(fn, name) {
+  return async (c) => {
+    const ctx = pluginContext(c, name);
+    try {
+      const out = await fn(c.sock, c.msg, ctx, ctx);
+      if (typeof out === 'string' && out) await c.send(out);
+    } catch (e) { console.error('[cmd]', name, e.message); try { await c.send('⚠️ ' + e.message); } catch {} }
+  };
+}
+
+for (const p of pluginRegistry) {
+  const key = 'pl_' + p.pattern;
+  if (!p.pattern || table[key]) continue;
+  table[key] = { run: adaptPlugin(p.function, p.pattern), react: p.react, desc: p.desc, plugin: true };
+  all[p.pattern.toLowerCase()] = key;
+  for (const a of (p.alias || [])) { const aa = String(a).toLowerCase().trim(); if (aa && !all[aa]) all[aa] = key; }
+  const cat = String(p.category || 'misc').toLowerCase();
+  (pluginCategories[cat] = pluginCategories[cat] || []).push(p.pattern.toLowerCase());
+}
+
 module.exports = { all, table, desc: {}, getJSON, getBuffer, safeCalc, categories, sc, CMDS };
