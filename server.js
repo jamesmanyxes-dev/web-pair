@@ -5,6 +5,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const QRCode = require('qrcode');
 const cmd = require('./commands');
+const portal = require('./portal');
 const {
   default: makeWASocket,
   useMultiFileAuthState,
@@ -24,159 +25,19 @@ const app = express();
 app.use(express.json());
 
 // ── state ──
-const state = { connected: false, qr: null, qrDataUrl: null, pairingCode: null, pairedFor: null, user: null, lastError: null, busy: false };
-let sock = null, restarts = 0, chatbotOn = true, histories = new Map();
+const state = { connected: true, qr: null, qrDataUrl: null, pairingCode: null, pairedFor: null, user: null, lastError: null, busy: false };
+let chatbotOn = true, histories = new Map();
 
-// ── WhatsApp ──
-async function startWA() {
-  if (state.busy) return;
-  state.busy = true;
-  const { state: auth, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
-  const { version } = await fetchLatestBaileysVersion();
-  sock = makeWASocket({
-    version,
-    auth: { creds: auth.creds, keys: makeCacheableSignalKeyStore(auth.keys, silentLogger()) },
-    printQRInTerminal: false,
-    browser: Browsers.ubuntu('Chrome'),
-    syncFullHistory: false,
-  });
-  sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', async (u) => {
-    const { connection, lastDisconnect, qr } = u;
-    if (qr) {
-      state.busy = false;   // registration session is live — pairing possible now
-      state.qr = qr;
-      try { state.qrDataUrl = await QRCode.toDataURL(qr, { margin: 1, width: 300 }); } catch {}
-      console.log('[WA] QR ready');
-    }
-    if (connection === 'open') {
-      state.connected = true; state.busy = false; restarts = 0;
-      state.qr = null; state.qrDataUrl = null; state.pairingCode = null; state.lastError = null;
-      state.user = sock.user?.id?.split(':')[0] || null;
-      console.log('[WA] connected as', state.user);
-      try { await sock.updateProfileName('evil⁶⁶⁶MD'); } catch {}
-    }
-    if (connection === 'close') {
-      state.connected = false; state.busy = false;
-      const code = lastDisconnect?.error?.output?.statusCode;
-      state.lastError = `${lastDisconnect?.error?.message || 'closed'} (${code})`;
-      console.log('[WA] closed:', code);
-      if (code === DisconnectReason.loggedOut) fs.rmSync(AUTH_DIR, { recursive: true, force: true });
-      if (code !== DisconnectReason.loggedOut && restarts < 15) {
-        restarts++;
-        setTimeout(startWA, code === 408 ? 1500 : Math.min(restarts * 2000, 15000));
-      }
-    }
-  });
-  sock.ev.on('messages.upsert', onMsg);
-}
-
-function silentLogger() {
-  const noop = () => undefined;
-  const o = { level: 'silent', child: () => o, trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop };
-  return o;
-}
-
-const PREFIXES = ['.', '!', '#', ''];
-async function onMsg({ messages }) {
-  const msg = messages[0];
-  if (!msg.message || msg.key.fromMe) return;
-  const jid = msg.key.remoteJid;
-  const text = msg.message.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '';
-  if (!text) return;
-  let body = text.trim();
-  for (const p of PREFIXES) { if (p && body.startsWith(p)) { body = body.slice(p.length); break; } }
-  const sp = body.indexOf(' ');
-  const name = (sp === -1 ? body : body.slice(0, sp)).toLowerCase();
-  const args = sp === -1 ? [] : body.slice(sp + 1).trim().split(/\s+/);
-
-  const key = cmd.all[name];
-  if (!key) {
-    // chatbot auto-reply: DMs or when tagged/replied
-    if (chatbotOn && AI_KEY) {
-      const botJid = sock.user?.id || '';
-      const mentioned = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-      const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
-      const hit = jid.endsWith('@s.whatsapp.net') || mentioned.some((m) => m.split(':')[0] === botJid.split(':')[0]) || (quoted && quoted.split(':')[0] === botJid.split(':')[0]);
-      if (hit) {
-        const clean = text.replace(/@\d+/g, '').trim();
-        if (clean.length > 1) return sock.sendMessage(jid, { text: await chat(clean, jid) }, { quoted: msg });
-      }
-    }
-    return;
-  }
-
-  const c = {
-    jid, msg, sock, args, all: cmd.all, desc: cmd.desc, categories: cmd.categories,
-    cmd: name, owner: OWNER, ownerName: 'evil', isOwner: true, host: state.user || 'not paired', botName: 'evil⁶⁶⁶MD',
-    chatbotOn: () => chatbotOn,
-    setChatbot: (v) => { chatbotOn = v; return AI_KEY ? '' : '⚠️ Set ANTHROPIC_API_KEY on Render to enable AI replies.'; },
-    banUser: () => '',
-    chat: (q) => chat(q, jid),
-    send: (t, extra = {}) => sock.sendMessage(jid, { text: t, ...extra }, { quoted: msg }),
-    sendImage: async (url, cap) => {
-      const buf = Buffer.from(await (await fetch(url)).arrayBuffer());
-      await sock.sendMessage(jid, { image: buf, caption: cap || '' }, { quoted: msg });
-    },
-  };
-  try { await cmd.table[key].run(c); }
-  catch (e) { console.error('[cmd]', name, e.message); try { c.send('⚠️ ' + e.message); } catch {} }
-}
-
-const PERSONA = 'You are evil⁶⁶⁶MD, a WhatsApp bot: confident, playful, helpful. Reply short and casual like a WhatsApp friend.';
-async function chat(text, jid) {
-  if (!AI_KEY) return '🤖 AI key not set (ANTHROPIC_API_KEY).';
-  const hist = histories.get(jid) || [];
-  hist.push({ role: 'user', content: text });
-  if (hist.length > 16) hist.splice(0, hist.length - 16);
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-api-key': AI_KEY, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: PERSONA, messages: hist }),
-  });
-  if (!r.ok) return '🤖 Claude error ' + r.status;
-  const d = await r.json();
-  const reply = (d.content || []).map((b) => b.text || '').join('').trim() || '…';
-  hist.push({ role: 'assistant', content: reply });
-  histories.set(jid, hist);
-  return reply;
-}
-
-// ── pairing ──
-function waReady() {
-  // socket exists, not connected, still has a live registration session (qr fresh or pairing possible)
-  return sock && !state.connected && !state.busy;
-}
-async function ensureFreshConnection(maxWaitMs = 25000) {
-  // if the socket is gone or errored out, restart it and wait until it can pair
-  if (!sock || (state.lastError && /closed|Connection/i.test(state.lastError)) ) {
-    state.busy = false;
-    try { sock?.end?.(); } catch {}
-    sock = null;
-    startWA();
-  }
-  const t0 = Date.now();
-  while (Date.now() - t0 < maxWaitMs) {
-    if (waReady()) return true;
-    await new Promise(r => setTimeout(r, 500));
-  }
-  return waReady();
-}
+// ── multi-pair WhatsApp engine (see portal.js) ──
+// Each number that pairs gets its OWN bot instance (bot/index.js) with THEM as owner.
 async function pairCode(number) {
-  if (state.connected) throw new Error('Already paired!');
-  const ok = await ensureFreshConnection();
-  if (!ok || !sock) throw new Error('Bot is reconnecting — press Generate again in ~10 seconds');
-  try {
-    const code = await sock.requestPairingCode(number);
-    state.pairingCode = code; state.pairedFor = number; state.pairingIssuedAt = Date.now();
-    return code;
-  } catch (e) {
-    // dead socket mid-flight: nuke and tell the user to retry
-    try { sock?.end?.(); } catch {}
-    sock = null; state.lastError = 'Connection Closed';
-    startWA();
-    throw new Error('Connection closed — reconnecting now, press Generate again in ~10 seconds');
+  const out = await portal.createPairing(number);
+  if (out.alreadyPaired) {
+    state.pairingCode = null; state.pairedFor = number;
+    throw new Error('Already paired — their bot is running. Send .menu to it on WhatsApp.');
   }
+  state.pairingCode = out.code; state.pairedFor = number; state.pairingIssuedAt = Date.now();
+  return out.code;
 }
 
 // ── web ──
@@ -198,9 +59,15 @@ app.get('/pair', async (req, res) => {
 });
 app.get('/health', (req, res) => res.json({ ok: true, connected: state.connected }));
 
+app.get('/code', async (req, res) => {
+  // compat endpoint for the bot's .pair command: /code?number=234... -> {code}
+  const n = String(req.query.number || '').replace(/[^0-9]/g, '');
+  if (!n || n.length < 7) return res.status(400).json({ error: 'Number with country code, e.g. 22873272569' });
+  try { res.json({ code: await pairCode(n) }); } catch (e) { res.status(409).json({ error: e.message }); }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[web] evil⁶⁶⁶MD pair UI on :${PORT}`);
-  startWA();
+  console.log(`[web] evil⁶⁶⁶MD multi-pair portal on :${PORT}`);
   if (TG_TOKEN) startTG(); else console.log('[TG] TG_TOKEN not set — web-only mode');
 });
 

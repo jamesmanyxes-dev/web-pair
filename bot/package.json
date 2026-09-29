@@ -1,16 +1,19 @@
 {
-  "name": "evil666md-webpair",
-  "version": "1.0.0",
-  "description": "evil\u2076\u2076\u2076MD \u2014 multi-pair portal: anyone pairs, owns their own bot (157 commands)",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "name": "evil666md-bot",
+  "version": "5.0.0",
+  "description": "evil\u2076\u2076\u2076MD WhatsApp bot",
+  "main": "index.js",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.x",
+    "npm": ">=10.x"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "stop": "pm2 stop KHAN-MD",
+    "restart": "pm2 restart KHAN-MD"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "@whiskeysockets/baileys": "github:Jeliostarr/DEV-Baileys",
     "@adiwajshing/keyed-db": "^0.2.4",
     "@dark-yasiya/yt-dl.js": "1.0.5",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -18,7 +21,7 @@
     "pino": "^9.7.0",
     "pm2": "^6.0.8",
     "util": "^0.12.5",
-    "express": "^4.19.2",
+    "express": "^5.1.0",
     "buffer": "^6.0.3",
     "moment-timezone": "^0.6.0",
     "axios": "^1.7.9",
@@ -45,7 +48,6 @@
     "qrcode-terminal": "^0.12.0",
     "yt-search": "2.13.1",
     "sequelize": "^6.37.7",
-    "sqlite3": "^5.1.7",
-    "qrcode": "^1.5.4"
+    "sqlite3": "^5.1.7"
   }
 }
