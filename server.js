@@ -67,7 +67,7 @@ app.get('/pair', async (req, res) => {
   }
   try { res.json({ code: await pairCode(n) }); } catch (e) { res.status(409).json({ error: e.message }); }
 });
-app.get('/health', (req, res) => res.json({ ok: true, connected: state.connected }));
+app.get('/health', (req, res) => res.json({ ok: true, connected: state.connected, shared: !!PANEL_URL, panel: PANEL_URL || null }));
 
 app.get('/code', async (req, res) => {
   // compat endpoint for the bot's .pair command: /code?number=234... -> {code}
